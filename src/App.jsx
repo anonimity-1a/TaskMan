@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleHelp, Columns3, List, Menu, Plus } from "lucide-react";
 import {
-  connectTaskMan,
-  disconnectTaskMan,
+  fetchMe,
   findLegacyDocument,
   loadSnapshot,
+  logoutAccount,
   saveSnapshot,
   watchRevisions,
 } from "./api.js";
-import { getConnection, loadStoredConnection } from "./connection.js";
+import { clearLegacyConnection, clearSession, getSession, saveSession } from "./auth.js";
+import { clearTaskCache, readTaskCache, writeTaskCache } from "./cache.js";
+import { AuthScreen } from "./components/AuthScreen.jsx";
 import { Board } from "./components/Board.jsx";
-import { ConnectScreen } from "./components/ConnectScreen.jsx";
 import { HelpDialog } from "./components/HelpDialog.jsx";
 import { MonthBoard } from "./components/MonthBoard.jsx";
 import { QuickAdd } from "./components/QuickAdd.jsx";
@@ -81,7 +82,7 @@ export function App() {
   const [alertsGranted, setAlertsGranted] = useState(
     () => typeof Notification !== "undefined" && Notification.permission === "granted",
   );
-  const [connection, setConnection] = useState(undefined);
+  const [user, setUser] = useState(undefined);
   const [legacy, setLegacy] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const searchRef = useRef(null);
@@ -92,74 +93,148 @@ export function App() {
   const docRef = useRef(null);
   const pendingRef = useRef(null);
   const pumpingRef = useRef(false);
+  const userIdRef = useRef(null);
+  const logoutRef = useRef(async () => {});
   const today = localISODate();
+
+  const applySnapshot = useCallback((snapshot, userId) => {
+    if (userIdRef.current !== userId) return;
+    revisionRef.current = snapshot.revision;
+    docRef.current = snapshot.document;
+    setDoc(snapshot.document);
+    writeTaskCache(userId, snapshot).catch(() => undefined);
+  }, []);
+
+  const logout = useCallback(async () => {
+    const userId = userIdRef.current;
+    userIdRef.current = null;
+    await logoutAccount().catch(() => undefined);
+    clearSession();
+    if (userId) await clearTaskCache(userId).catch(() => undefined);
+    revisionRef.current = 0;
+    docRef.current = null;
+    pendingRef.current = null;
+    setDoc(null);
+    setLegacy(null);
+    setSelectedId(null);
+    setQuickAdd(null);
+    setUser(null);
+    setError("");
+    setToast("");
+  }, []);
+  logoutRef.current = logout;
+
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
-    loadStoredConnection().then((stored) => {
-      if (!cancelled) setConnection(stored);
-    });
+    clearLegacyConnection();
+    const session = getSession();
+    if (!session) {
+      setUser(null);
+      return undefined;
+    }
+    userIdRef.current = session.user.id;
+    setUser(session.user);
+    (async () => {
+      try {
+        const me = await fetchMe();
+        if (cancelled || userIdRef.current !== session.user.id) return;
+        saveSession({ token: session.token, user: me });
+        setUser(me);
+      } catch (reason) {
+        if (cancelled || userIdRef.current !== session.user.id) return;
+        if (reason?.status === 401) await logoutRef.current();
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
-    if (!connection) return undefined;
+    if (!user?.id) return undefined;
+    const userId = user.id;
     let cancelled = false;
-    loadSnapshot(connection)
-      .then(async (snapshot) => {
-        if (cancelled) return;
-        revisionRef.current = snapshot.revision;
-        docRef.current = snapshot.document;
-        setDoc(snapshot.document);
+    (async () => {
+      const cached = await readTaskCache(userId);
+      if (cancelled || userIdRef.current !== userId) return;
+      if (cached && !docRef.current) {
+        revisionRef.current = cached.revision;
+        docRef.current = cached.document;
+        setDoc(cached.document);
+      }
+      try {
+        const snapshot = await loadSnapshot();
+        if (cancelled || savingRef.current > 0 || pendingRef.current) return;
+        applySnapshot(snapshot, userId);
         setError("");
         const previous = await findLegacyDocument(snapshot.document);
-        if (!cancelled) setLegacy(previous);
-      })
-      .catch((reason) => {
-        if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : "Could not load tasks");
+        if (!cancelled && userIdRef.current === userId) setLegacy(previous);
+      } catch (reason) {
+        if (cancelled || userIdRef.current !== userId) return;
+        if (reason?.status === 401) {
+          await logoutRef.current();
+          return;
         }
-      });
+        setError(
+          docRef.current
+            ? "Showing saved tasks. Could not refresh."
+            : reason instanceof Error
+              ? reason.message
+              : "Could not load tasks",
+        );
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [connection]);
+  }, [applySnapshot, user?.id]);
 
   useEffect(() => {
-    if (!connection) return undefined;
+    if (!user?.id) return undefined;
+    const userId = user.id;
     const controller = new AbortController();
-    watchRevisions(connection, controller.signal, (revision) => {
-      if (revision === revisionRef.current || savingRef.current > 0) return;
-      loadSnapshot(connection)
+    const refresh = () => {
+      if (savingRef.current > 0 || pendingRef.current) return;
+      loadSnapshot()
         .then((snapshot) => {
-          if (snapshot.revision !== revisionRef.current && savingRef.current === 0) {
-            revisionRef.current = snapshot.revision;
-            docRef.current = snapshot.document;
-            setDoc(snapshot.document);
-          }
+          if (userIdRef.current !== userId || savingRef.current > 0 || pendingRef.current) return;
+          if (snapshot.revision !== revisionRef.current) applySnapshot(snapshot, userId);
         })
-        .catch(() => undefined);
-    });
-    const onFocus = () => {
-      if (savingRef.current > 0) return;
-      loadSnapshot(connection)
-        .then((snapshot) => {
-          if (snapshot.revision !== revisionRef.current && savingRef.current === 0) {
-            revisionRef.current = snapshot.revision;
-            docRef.current = snapshot.document;
-            setDoc(snapshot.document);
-          }
-        })
-        .catch(() => undefined);
+        .catch((reason) => {
+          if (reason?.status === 401) logoutRef.current();
+        });
     };
-    window.addEventListener("focus", onFocus);
+    watchRevisions(controller.signal, (revision) => {
+      if (revision === revisionRef.current || savingRef.current > 0) return;
+      refresh();
+    }, () => logoutRef.current());
+    window.addEventListener("focus", refresh);
     return () => {
       controller.abort();
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", refresh);
     };
-  }, [connection]);
+  }, [applySnapshot, user?.id]);
+
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== "taskman-session" || event.newValue) return;
+      userIdRef.current = null;
+      revisionRef.current = 0;
+      docRef.current = null;
+      pendingRef.current = null;
+      setDoc(null);
+      setLegacy(null);
+      setSelectedId(null);
+      setUser(null);
+      setError("");
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const commit = useCallback((next) => {
     pendingRef.current = next;
@@ -175,14 +250,23 @@ export function App() {
           const saved = await saveSnapshot(toSave, revisionRef.current);
           revisionRef.current = saved.revision;
           docRef.current = saved.document;
+          if (userIdRef.current) writeTaskCache(userIdRef.current, saved).catch(() => undefined);
           if (!pendingRef.current) setDoc(saved.document);
           setError("");
         } catch (reason) {
           pendingRef.current = null;
-          if (reason?.status === 409 && reason.document) {
+          if (reason?.status === 401) {
+            await logoutRef.current();
+          } else if (reason?.status === 409 && reason.document) {
             revisionRef.current = reason.revision;
             docRef.current = reason.document;
             setDoc(reason.document);
+            if (userIdRef.current) {
+              writeTaskCache(userIdRef.current, {
+                revision: reason.revision,
+                document: reason.document,
+              }).catch(() => undefined);
+            }
             setToast("Updated on another device");
             setError("");
           } else {
@@ -314,31 +398,31 @@ export function App() {
     }
   };
 
-  const leaveServer = async () => {
-    await disconnectTaskMan();
-    revisionRef.current = 0;
-    docRef.current = null;
-    setDoc(null);
+  const signIn = async (session) => {
+    const cached = await readTaskCache(session.user.id);
+    userIdRef.current = session.user.id;
+    if (cached) {
+      revisionRef.current = cached.revision;
+      docRef.current = cached.document;
+      setDoc(cached.document);
+    } else {
+      revisionRef.current = 0;
+      docRef.current = null;
+      setDoc(null);
+    }
     setLegacy(null);
-    setConnection(null);
     setError("");
+    setUser(session.user);
   };
 
-  if (connection === undefined) {
+  if (user === undefined) {
     return (
       <main className="grid h-full place-items-center text-sm text-stone-500">Loading tasks…</main>
     );
   }
 
-  if (!connection) {
-    return (
-      <ConnectScreen
-        onConnect={async (input) => {
-          await connectTaskMan(input);
-          setConnection(getConnection());
-        }}
-      />
-    );
+  if (!user) {
+    return <AuthScreen onAuth={signIn} />;
   }
 
   if (!doc || !selection || !counts) {
@@ -346,8 +430,8 @@ export function App() {
       <main className="grid h-full place-items-center gap-3 px-6 text-center text-sm text-stone-500">
         <p>{error || "Loading tasks…"}</p>
         {error ? (
-          <button type="button" onClick={leaveServer} className="text-indigo-700">
-            Change server
+          <button type="button" onClick={logout} className="text-indigo-700">
+            Log out
           </button>
         ) : null}
       </main>
@@ -381,7 +465,8 @@ export function App() {
         counts={counts}
         mobileOpen={menuOpen}
         onClose={() => setMenuOpen(false)}
-        onDisconnect={leaveServer}
+        accountName={user.username}
+        onLogout={logout}
         onView={(next) => {
           changeView(next);
           setMenuOpen(false);
@@ -572,7 +657,7 @@ export function App() {
         ) : null}
         {legacy ? (
           <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900 md:mx-8">
-            <p>Tasks already on this computer can be copied to the server.</p>
+            <p>Tasks already on this computer can be copied to your account.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setLegacy(null)} className="px-2 py-1">
                 Skip
@@ -585,7 +670,7 @@ export function App() {
                 }}
                 className="rounded-lg bg-indigo-600 px-3 py-1 text-white"
               >
-                Copy to server
+                Copy tasks
               </button>
             </div>
           </div>

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TaskMan",
   "version": "1.0.0",
-  "description": "Today and quick add for the shared TaskMan list.",
+  "description": "Today and quick add for your TaskMan account.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "TaskMan"

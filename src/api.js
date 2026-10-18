@@ -1,4 +1,5 @@
-import { clearConnection, getConnection, normalizeConnection, saveConnection } from "./connection.js";
+import { apiBase } from "./apiBase.js";
+import { clearSession, getSession, saveSession } from "./auth.js";
 import { normalizeDocument } from "./normalize.js";
 
 export class ApiError extends Error {
@@ -15,13 +16,14 @@ const snapshotFrom = (body) => ({
   document: normalizeDocument(body.document),
 });
 
-const request = async (connection, path, options = {}) => {
+const request = async (path, options = {}) => {
+  const session = getSession();
   let response;
   try {
-    response = await fetch(`${connection.url}${path}`, {
+    response = await fetch(`${apiBase()}${path}`, {
       ...options,
       headers: {
-        Authorization: `Bearer ${connection.token}`,
+        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
         ...(options.headers ?? {}),
       },
     });
@@ -31,18 +33,62 @@ const request = async (connection, path, options = {}) => {
   return response;
 };
 
-export const loadSnapshot = async (connection = getConnection()) => {
-  if (!connection) throw new ApiError("Connect to TaskMan first.", 401);
-  const response = await request(connection, "/api/document");
+const errorFrom = async (response, fallback) => {
   const body = await response.json().catch(() => ({}));
-  if (response.status === 401) throw new ApiError("That passphrase was not accepted.", 401);
+  throw new ApiError(typeof body.error === "string" ? body.error : fallback, response.status);
+};
+
+export const registerAccount = async ({ email, username, password }) => {
+  const response = await request("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, username, password }),
+  });
+  if (!response.ok) await errorFrom(response, "Could not create the account.");
+  const session = await response.json();
+  saveSession(session);
+  return session;
+};
+
+export const loginAccount = async ({ identity, password }) => {
+  const response = await request("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identity, password }),
+  });
+  if (!response.ok) await errorFrom(response, "Those sign-in details were not accepted.");
+  const session = await response.json();
+  saveSession(session);
+  return session;
+};
+
+export const logoutAccount = async () => {
+  const response = await request("/auth/logout", { method: "POST" }).catch(() => null);
+  clearSession();
+  if (response && !response.ok && response.status !== 204) {
+    /* The local session is already gone. A later request will ask for sign-in. */
+  }
+};
+
+export const fetchMe = async () => {
+  const response = await request("/auth/me");
+  if (response.status === 401) throw new ApiError("Sign in again.", 401);
+  if (!response.ok) throw new ApiError("Could not confirm this account.", response.status);
+  return response.json();
+};
+
+export const loadSnapshot = async () => {
+  if (!getSession()) throw new ApiError("Sign in again.", 401);
+  const response = await request("/tasks");
+  const body = await response.json().catch(() => ({}));
+  if (response.status === 401) throw new ApiError("Sign in again.", 401);
   if (!response.ok) throw new ApiError("Could not load tasks.", response.status);
   return snapshotFrom(body);
 };
 
-export const saveSnapshot = async (document, revision, connection = getConnection()) => {
-  if (!connection) throw new ApiError("Connect to TaskMan first.", 401);
-  const response = await request(connection, "/api/document", {
+export const saveSnapshot = async (document, revision) => {
+  if (!getSession()) throw new ApiError("Sign in again.", 401);
+  const response = await request("/tasks", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -54,32 +100,22 @@ export const saveSnapshot = async (document, revision, connection = getConnectio
   if (response.status === 409) {
     throw new ApiError("Updated on another device", 409, snapshotFrom(body));
   }
-  if (response.status === 401) throw new ApiError("That passphrase was not accepted.", 401);
+  if (response.status === 401) throw new ApiError("Sign in again.", 401);
   if (!response.ok) throw new ApiError("Could not reach TaskMan. This change was not saved.", response.status);
   return snapshotFrom(body);
 };
 
-export const connectTaskMan = async (input) => {
-  const connection = normalizeConnection(input);
-  if (!connection) throw new ApiError("Enter a server address and passphrase.", 400);
-  if (window.desktop?.setConnection) await window.desktop.setConnection(connection);
-  const snapshot = await loadSnapshot(connection);
-  saveConnection(connection);
-  return snapshot;
-};
-
-export const disconnectTaskMan = async () => {
-  clearConnection();
-  if (window.desktop?.clearConnection) await window.desktop.clearConnection();
-};
-
-export const watchRevisions = async (connection, signal, onRevision) => {
+export const watchRevisions = async (signal, onRevision, onUnauthorized) => {
   while (!signal.aborted) {
     try {
-      const response = await request(connection, "/api/events", {
+      const response = await request("/events", {
         headers: { Accept: "text/event-stream" },
         signal,
       });
+      if (response.status === 401) {
+        onUnauthorized();
+        return;
+      }
       if (!response.ok || !response.body) throw new ApiError("Live updates stopped.", response.status);
       const reader = response.body.getReader();
       const decoder = new TextDecoder();

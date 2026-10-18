@@ -1,8 +1,6 @@
 # TaskMan
 
-TaskMan keeps one task list on a server you run at home. The website, the desktop window, a phone browser, and the browser extension all read and write that same list.
-
-Projects, sections, labels, filters, priorities, repeating tasks, reminders, and notes live in one JSON file on the server. There is no account service. A passphrase you choose is required for every API call.
+TaskMan is one server with a separate account for each person. The website, the desktop window, a phone browser, and the browser extension all talk to that server. Each account has its own projects, sections, labels, filters, and tasks.
 
 ## Requirements
 
@@ -17,7 +15,7 @@ npm install
 npm run dev
 ```
 
-That starts three processes: the API on port 8787, the website on port 5173, and the Electron window. The website proxies `/api` to the local API. The dev passphrase is `taskman-dev`.
+That starts three processes: the API on port 8787, the website on port 5173, and the Electron window. The website calls `/api`, and Vite proxies that to the local API. Create an account on the first screen. There is no shared passphrase.
 
 Press Ctrl+K to open quick add and Ctrl+F to search.
 
@@ -34,16 +32,16 @@ npm run dev
 
 ## Home server
 
-Build and run the container, then open `http://192.168.1.9:5173` from any device on the network. Set a passphrase before the first start. The default in Compose is `change-me`; replace it.
+Set a long random `TASKMAN_JWT_SECRET` before the first start, then open the site from any device on the network. People sign in with their own email and password.
 
 ```bash
-set TASKMAN_TOKEN=your-passphrase
+set TASKMAN_JWT_SECRET=replace-with-a-long-random-string
 docker compose up -d --build
 ```
 
-The site and the API are the same process. Tasks are stored in the `taskman-data` volume at `/data/document.json`. Recreating the Portainer stack uses this Compose file. Data that used to live only in a browser is not in the old container.
+The site and the API are the same process. Accounts and tasks are stored in the `taskman-data` volume at `/data/taskman.json`. A previous shared list at `/data/document.json` is copied into the first account created on that server. A phone can use Add to Home Screen. The sidebar collapses behind a menu button on a narrow screen.
 
-Each device asks for the server address and passphrase once, then keeps them on that device. A phone can use Add to Home Screen. The sidebar collapses behind a menu button on a narrow screen.
+The browser uses `/api` on the same origin. Set `VITE_API_URL` at build time when the API lives on another origin.
 
 ## Browser extension
 
@@ -51,11 +49,13 @@ Each device asks for the server address and passphrase once, then keeps them on 
 npm run build:extension
 ```
 
-In Chrome or Edge, open `chrome://extensions`, turn on Developer mode, and load `extension/dist`. The popup shows Today and quick add. Projects, the board, and the calendar stay on the website.
+In Chrome or Edge, open `chrome://extensions`, turn on Developer mode, and load `extension/dist`. The popup signs in to the local API at `http://127.0.0.1:8787/api`. Set `VITE_API_URL` to the home server, such as `http://192.168.1.9:5173/api`, before building when the API is not on this computer. The popup shows Today and quick add. Projects, the board, and the calendar stay on the website.
 
-## Moving an older copy
+## Saved tasks on this device
 
-Desktop settings now live in `%APPDATA%\TaskMan`. If the server list is still empty, TaskMan offers a one-time copy from `%APPDATA%\local-tasks\data.json` or from the previous browser key `local-tasks-document`. After that, those locations are only an import source. If the server cannot be reached, the screen says so and does not keep a second copy.
+After sign-in, tasks are kept in this browser under `tasks_cache_<user id>`. The list appears from that copy immediately, then refreshes from the server. Log out clears the signed-in account's copy and the tasks on screen. Another account on the same browser uses a different key.
+
+An empty account can still import an older browser copy from `local-tasks-document`, or the desktop file `%APPDATA%\local-tasks\data.json`.
 
 ## Production desktop window
 
@@ -64,4 +64,4 @@ npm run build
 npm start
 ```
 
-`npm start` loads `dist/` inside Electron. Point it at the home server on the first screen.
+`npm start` loads `dist/` inside Electron and talks to the API on `http://127.0.0.1:8787`. Build with `VITE_API_URL` when that window should use another API origin.

@@ -95,7 +95,8 @@ export function Sidebar({
   counts,
   mobileOpen = false,
   onClose,
-  onDisconnect,
+  accountName = "",
+  onLogout,
   onView,
   onAddProject,
   onRenameProject,
@@ -310,14 +311,17 @@ export function Sidebar({
             ))
           )}
         </Collection>
-        {onDisconnect ? (
-          <button
-            type="button"
-            onClick={onDisconnect}
-            className="mt-6 px-3 text-left text-xs text-stone-400 hover:text-stone-700"
-          >
-            Change server
-          </button>
+        {onLogout ? (
+          <div className="mt-6">
+            {accountName ? <p className="px-3 text-xs text-stone-400">{accountName}</p> : null}
+            <button
+              type="button"
+              onClick={onLogout}
+              className="px-3 text-left text-xs text-stone-400 hover:text-stone-700"
+            >
+              Log out
+            </button>
+          </div>
         ) : null}
       </div>
     </aside>

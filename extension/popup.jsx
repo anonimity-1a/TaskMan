@@ -1,138 +1,155 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { apiBase } from "../src/apiBase.js";
+import { loginAccount, logoutAccount, registerAccount, loadSnapshot, saveSnapshot } from "../src/api.js";
+import { clearLegacyConnection, getSession } from "../src/auth.js";
+import { clearTaskCache, readTaskCache, writeTaskCache } from "../src/cache.js";
 import { localISODate } from "../src/dates.js";
 import { addTaskFromResolved, formatDue, toggleTask } from "../src/model.js";
-import { normalizeDocument } from "../src/normalize.js";
 import { resolveQuickAdd } from "../src/parse.js";
 import "./popup.css";
-
-const storage = {
-  async get() {
-    const saved = await chrome.storage.local.get(["url", "token"]);
-    if (!saved.url || !saved.token) return null;
-    return { url: saved.url, token: saved.token };
-  },
-  async set(connection) {
-    await chrome.storage.local.set(connection);
-  },
-  async clear() {
-    await chrome.storage.local.remove(["url", "token"]);
-  },
-};
-
-const request = async (connection, path, options = {}) => {
-  const response = await fetch(`${connection.url}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${connection.token}`,
-      ...(options.headers ?? {}),
-    },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(
-      response.status === 401
-        ? "That passphrase was not accepted."
-        : "Could not reach TaskMan.",
-    );
-    error.status = response.status;
-    error.body = body;
-    throw error;
-  }
-  return body;
-};
 
 const todayTasks = (document, today) =>
   document.tasks
     .filter((task) => !task.completed && task.due && task.due <= today)
     .sort((a, b) => a.due.localeCompare(b.due) || a.priority - b.priority || a.order - b.order);
 
+const siteUrl = () => {
+  const base = apiBase();
+  if (base.startsWith("/")) return window.location.origin;
+  const url = new URL(base, "http://127.0.0.1");
+  if (url.port === "8787") url.port = "5173";
+  return url.origin;
+};
+
 function Popup() {
-  const [connection, setConnection] = useState(undefined);
-  const [url, setUrl] = useState("http://192.168.1.9:5173");
-  const [token, setToken] = useState("");
+  const [session, setSession] = useState(undefined);
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [identity, setIdentity] = useState("");
+  const [password, setPassword] = useState("");
   const [snapshot, setSnapshot] = useState(null);
   const [raw, setRaw] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const today = localISODate();
+  const register = mode === "register";
 
-  const load = async (nextConnection) => {
-    const body = await request(nextConnection, "/api/document");
-    setSnapshot({ revision: body.revision, document: normalizeDocument(body.document) });
-    setError("");
+  const showSnapshot = async (userId, next) => {
+    setSnapshot(next);
+    await writeTaskCache(userId, next);
   };
 
   useEffect(() => {
-    storage
-      .get()
-      .then(async (saved) => {
-        if (!saved) {
-          setConnection(null);
+    let cancelled = false;
+    clearLegacyConnection();
+    const saved = getSession();
+    if (!saved) {
+      setSession(null);
+      return undefined;
+    }
+    setSession(saved);
+    (async () => {
+      const cached = await readTaskCache(saved.user.id);
+      if (!cancelled && cached) setSnapshot(cached);
+      try {
+        const fresh = await loadSnapshot();
+        if (!cancelled) await showSnapshot(saved.user.id, fresh);
+      } catch (reason) {
+        if (cancelled) return;
+        if (reason?.status === 401) {
+          await clearTaskCache(saved.user.id).catch(() => undefined);
+          await logoutAccount().catch(() => undefined);
+          setSnapshot(null);
+          setSession(null);
           return;
         }
-        setUrl(saved.url);
-        await load(saved);
-        setConnection(saved);
-      })
-      .catch((reason) => {
-        setConnection(null);
-        setError(reason instanceof Error ? reason.message : "Could not reach TaskMan.");
-      });
+        if (!cached) setError(reason instanceof Error ? reason.message : "Could not reach TaskMan.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const save = async (document) => {
-    const body = await request(connection, "/api/document", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "If-Match": String(snapshot.revision),
-      },
-      body: JSON.stringify(document),
-    });
-    setSnapshot({ revision: body.revision, document: normalizeDocument(body.document) });
+  const signIn = async (event) => {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    try {
+      const next = register
+        ? await registerAccount({ email, username, password })
+        : await loginAccount({ identity, password });
+      const cached = await readTaskCache(next.user.id);
+      if (cached) setSnapshot(cached);
+      setSession(next);
+      const fresh = await loadSnapshot();
+      await showSnapshot(next.user.id, fresh);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not sign in");
+    } finally {
+      setPending(false);
+    }
   };
 
-  if (connection === undefined) {
+  const save = async (document) => {
+    const body = await saveSnapshot(document, snapshot.revision);
+    await showSnapshot(session.user.id, body);
+  };
+
+  if (session === undefined || (session && !snapshot && !error)) {
     return <p className="p-4 text-sm text-stone-500">Loading tasks…</p>;
   }
 
-  if (!connection || !snapshot) {
+  if (!session || !snapshot) {
     return (
-      <form
-        className="p-4"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setPending(true);
-          setError("");
-          try {
-            const next = { url: new URL(url).origin, token: token.trim() };
-            await load(next);
-            await storage.set(next);
-            setConnection(next);
-          } catch (reason) {
-            setError(reason instanceof Error ? reason.message : "Could not connect");
-          } finally {
-            setPending(false);
-          }
-        }}
-      >
+      <form className="p-4" onSubmit={signIn}>
         <h1 className="text-lg font-semibold text-stone-900">TaskMan</h1>
-        <p className="mt-1 text-sm text-stone-500">Use the same server as the website.</p>
+        <p className="mt-1 text-sm text-stone-500">
+          {register ? "Create an account on this server." : "Sign in to your tasks."}
+        </p>
+        {register ? (
+          <>
+            <label className="mt-3 block text-sm text-stone-600">
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2"
+              />
+            </label>
+            <label className="mt-3 block text-sm text-stone-600">
+              Username
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                required
+                className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2"
+              />
+            </label>
+          </>
+        ) : (
+          <label className="mt-3 block text-sm text-stone-600">
+            Email or username
+            <input
+              value={identity}
+              onChange={(event) => setIdentity(event.target.value)}
+              required
+              className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2"
+            />
+          </label>
+        )}
         <label className="mt-3 block text-sm text-stone-600">
-          Server address
-          <input
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2"
-          />
-        </label>
-        <label className="mt-3 block text-sm text-stone-600">
-          Passphrase
+          Password
           <input
             type="password"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            minLength={8}
             className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2"
           />
         </label>
@@ -142,7 +159,17 @@ function Popup() {
           disabled={pending}
           className="mt-4 w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          Continue
+          {pending ? "Please wait…" : register ? "Create account" : "Sign in"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode(register ? "login" : "register");
+            setError("");
+          }}
+          className="mt-3 w-full text-sm text-indigo-700"
+        >
+          {register ? "Already have an account? Sign in" : "Need an account? Register"}
         </button>
       </form>
     );
@@ -155,9 +182,11 @@ function Popup() {
       <header className="flex items-center justify-between px-4 pt-3 pb-2">
         <div>
           <h1 className="text-lg font-semibold text-stone-900">Today</h1>
-          <p className="text-xs text-stone-500">{tasks.length} open</p>
+          <p className="text-xs text-stone-500">
+            {tasks.length} open · {session.user.username}
+          </p>
         </div>
-        <a href={connection.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-700">
+        <a href={siteUrl()} target="_blank" rel="noreferrer" className="text-xs text-indigo-700">
           Open TaskMan
         </a>
       </header>
@@ -195,9 +224,10 @@ function Popup() {
             setRaw("");
           } catch (reason) {
             if (reason?.status === 409) {
-              setSnapshot({
-                revision: reason.body.revision,
-                document: normalizeDocument(reason.body.document),
+              setSnapshot({ revision: reason.revision, document: reason.document });
+              await writeTaskCache(session.user.id, {
+                revision: reason.revision,
+                document: reason.document,
               });
               setError("Updated on another device");
             } else {
@@ -246,13 +276,16 @@ function Popup() {
       <button
         type="button"
         onClick={async () => {
-          await storage.clear();
-          setConnection(null);
+          const userId = session.user.id;
+          await logoutAccount().catch(() => undefined);
+          await clearTaskCache(userId).catch(() => undefined);
+          setSession(null);
           setSnapshot(null);
+          setPassword("");
         }}
         className="border-t border-stone-200 px-4 py-2 text-left text-xs text-stone-400"
       >
-        Change server
+        Log out
       </button>
     </main>
   );

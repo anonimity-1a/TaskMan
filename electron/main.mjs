@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, session } from "electron";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,34 +15,8 @@ const allowedOrigins = new Set([
   "http://127.0.0.1:8787",
 ]);
 
-const connectionFile = () => path.join(app.getPath("userData"), "connection.json");
 const legacyFile = () => path.join(app.getPath("appData"), "local-tasks", "data.json");
-
-const normalizeConnection = (value) => {
-  if (!value || typeof value.token !== "string" || !value.token.trim()) return null;
-  let url;
-  try {
-    url = new URL(value.url);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-  return { url: url.origin, token: value.token.trim() };
-};
-
-const remember = (connection) => {
-  if (connection) allowedOrigins.add(connection.url);
-};
-
-const readConnection = async () => {
-  try {
-    const connection = normalizeConnection(JSON.parse(await readFile(connectionFile(), "utf8")));
-    remember(connection);
-    return connection;
-  } catch {
-    return null;
-  }
-};
+const oldConnectionFile = () => path.join(app.getPath("userData"), "connection.json");
 
 const isAllowedUrl = (url) => {
   if (url.startsWith("file://") || url.startsWith("devtools://")) return true;
@@ -83,22 +57,9 @@ const createWindow = () => {
 };
 
 app.whenReady().then(async () => {
-  await readConnection();
+  await unlink(oldConnectionFile()).catch(() => undefined);
   session.defaultSession.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, (details, callback) => {
     callback({ cancel: !isAllowedUrl(details.url) });
-  });
-  ipcMain.handle("connection:get", () => readConnection());
-  ipcMain.handle("connection:set", async (_event, input) => {
-    const connection = normalizeConnection(input);
-    if (!connection) throw new Error("Enter a server address and passphrase.");
-    await mkdir(app.getPath("userData"), { recursive: true });
-    await writeFile(connectionFile(), JSON.stringify(connection), "utf8");
-    remember(connection);
-    return connection;
-  });
-  ipcMain.handle("connection:clear", async () => {
-    await writeFile(connectionFile(), "{}", "utf8").catch(() => undefined);
-    return null;
   });
   ipcMain.handle("store:legacy", async () => {
     try {

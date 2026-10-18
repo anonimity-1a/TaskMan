@@ -1,73 +1,55 @@
 import { createReadStream } from "node:fs";
-import { access, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
-import { emptyDocument, normalizeDocument } from "../src/normalize.js";
+import { normalizeDocument } from "../src/normalize.js";
+import { bearerToken, checkPassword, createToken, hashPassword, publicUser, readToken } from "./auth.mjs";
+import { openDatabase } from "./db.mjs";
 
-const token = process.env.TASKMAN_TOKEN ?? "";
-if (!token) {
-  console.error("Set TASKMAN_TOKEN before starting TaskMan.");
+const secret = process.env.TASKMAN_JWT_SECRET ?? "";
+const devSecret = "taskman-dev-jwt-secret-change-me";
+const production = process.env.NODE_ENV === "production";
+if (!secret || (production && (secret.length < 32 || secret === devSecret))) {
+  console.error("Set TASKMAN_JWT_SECRET to a random string of at least 32 characters.");
   process.exit(1);
 }
 
 const dataFile = process.env.TASKMAN_DATA
   ? path.resolve(process.env.TASKMAN_DATA)
-  : path.join(process.cwd(), "data", "document.json");
+  : path.join(process.cwd(), "data", "taskman.json");
+const legacyFile = process.env.TASKMAN_LEGACY
+  ? path.resolve(process.env.TASKMAN_LEGACY)
+  : path.join(path.dirname(dataFile), "document.json");
 const port = Number(process.env.PORT) || 8787;
 const distDir = path.resolve(process.cwd(), "dist");
-const listeners = new Set();
+const db = await openDatabase({ file: dataFile, legacyFile });
+const listeners = new Map();
 
-let state = { revision: 0, document: emptyDocument() };
-let writeLock = Promise.resolve();
+const attempts = new Map();
 
-const enqueue = (job) => {
-  const run = writeLock.then(job, job);
-  writeLock = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-};
-
-const loadState = async () => {
-  try {
-    const raw = JSON.parse(await readFile(dataFile, "utf8"));
-    const document = normalizeDocument(raw?.document ?? raw);
-    const revision =
-      raw && Number.isInteger(raw.revision) && raw.document ? raw.revision : 0;
-    state = { revision, document };
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-    state = { revision: 0, document: emptyDocument() };
+const tooManyAttempts = (request) => {
+  const ip = request.socket.remoteAddress ?? "unknown";
+  const now = Date.now();
+  const recent = (attempts.get(ip) ?? []).filter((time) => now - time < 10 * 60 * 1000);
+  if (recent.length >= 30) {
+    attempts.set(ip, recent);
+    return true;
   }
-};
-
-const persist = async (next) => {
-  await mkdir(path.dirname(dataFile), { recursive: true });
-  const temporary = `${dataFile}.tmp`;
-  await writeFile(temporary, JSON.stringify(next), "utf8");
-  try {
-    await rename(temporary, dataFile);
-  } catch (error) {
-    if (error?.code !== "EPERM" && error?.code !== "EEXIST") throw error;
-    await unlink(dataFile);
-    await rename(temporary, dataFile);
-  }
-  state = next;
-  const payload = `data: ${JSON.stringify({ revision: next.revision })}\n\n`;
-  for (const listener of listeners) listener.write(payload);
+  recent.push(now);
+  attempts.set(ip, recent);
+  return false;
 };
 
 const corsHeaders = (request) => ({
   "Access-Control-Allow-Origin": request.headers.origin || "*",
   "Access-Control-Allow-Headers": "authorization, content-type, if-match",
-  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
   Vary: "Origin",
 });
 
 const sendJson = (request, response, status, body) => {
-  const data = JSON.stringify(body);
+  const data = body === undefined ? "" : JSON.stringify(body);
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(data),
@@ -77,21 +59,67 @@ const sendJson = (request, response, status, body) => {
   response.end(data);
 };
 
-const authorized = (request) => request.headers.authorization === `Bearer ${token}`;
-
-const readBody = async (request) => {
+const readBody = async (request, limit) => {
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 5_000_000) {
+    if (size > limit) {
       const error = new Error("Document is too large");
       error.status = 413;
       throw error;
     }
     chunks.push(chunk);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  const text = Buffer.concat(chunks).toString("utf8");
+  if (!text) return {};
+  return JSON.parse(text);
+};
+
+const emailOf = (value) => {
+  if (typeof value !== "string") return "";
+  const email = value.trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "";
+  return email;
+};
+
+const usernameOf = (value) => {
+  if (typeof value !== "string") return "";
+  const username = value.trim();
+  if (!/^[A-Za-z0-9._-]{2,40}$/.test(username)) return "";
+  return username;
+};
+
+const passwordOf = (value) => {
+  if (typeof value !== "string" || value.length < 8 || value.length > 200) return "";
+  return value;
+};
+
+const currentUser = (request) => {
+  const claims = readToken(bearerToken(request), secret);
+  if (!claims) return null;
+  const session = db.getSession(claims.jti);
+  if (!session || session.revoked_at || session.user_id !== claims.sub) return null;
+  if (Date.parse(session.expires_at) <= Date.now()) return null;
+  const user = db.getUserById(session.user_id);
+  if (!user) return null;
+  return user;
+};
+
+const issueSession = async (user) => {
+  const issued = createToken(user.id, secret);
+  await db.createSession({
+    id: issued.jti,
+    user_id: user.id,
+    expires_at: issued.expiresAt,
+    revoked_at: null,
+  });
+  return { token: issued.token, user: publicUser(user) };
+};
+
+const notify = (userId, revision) => {
+  const payload = `data: ${JSON.stringify({ revision })}\n\n`;
+  for (const listener of listeners.get(userId) ?? []) listener.write(payload);
 };
 
 const contentTypes = {
@@ -129,6 +157,156 @@ const serveStatic = async (request, response, pathname) => {
   createReadStream(filePath).pipe(response);
 };
 
+const handleAuth = async (request, response, url) => {
+  if (request.method === "POST" && url.pathname === "/api/auth/register") {
+    if (tooManyAttempts(request)) {
+      sendJson(request, response, 429, { error: "Too many attempts. Try again later." });
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(request, 100_000);
+    } catch {
+      sendJson(request, response, 400, { error: "Account details could not be read." });
+      return;
+    }
+    const email = emailOf(body.email);
+    const username = usernameOf(body.username);
+    const password = passwordOf(body.password);
+    if (!email || !username || !password) {
+      sendJson(request, response, 400, {
+        error: "Use an email, a username, and a password of at least 8 characters.",
+      });
+      return;
+    }
+    const passwordHash = await hashPassword(password);
+    const created = await db.createUser({ email, username, passwordHash });
+    if (created.error === "email") {
+      sendJson(request, response, 409, { error: "That email is already registered." });
+      return;
+    }
+    if (created.error === "username") {
+      sendJson(request, response, 409, { error: "That username is already taken." });
+      return;
+    }
+    sendJson(request, response, 201, await issueSession(created.user));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/auth/login") {
+    if (tooManyAttempts(request)) {
+      sendJson(request, response, 429, { error: "Too many attempts. Try again later." });
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(request, 100_000);
+    } catch {
+      sendJson(request, response, 400, { error: "Sign-in details could not be read." });
+      return;
+    }
+    const identity = typeof body.identity === "string" ? body.identity.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    const user = identity.includes("@") ? db.getUserByEmail(identity) : db.getUserByUsername(identity);
+    const accepted = await checkPassword(password, user?.password_hash);
+    if (!accepted || !user) {
+      sendJson(request, response, 401, { error: "Those sign-in details were not accepted." });
+      return;
+    }
+    sendJson(request, response, 200, await issueSession(user));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/auth/logout") {
+    const claims = readToken(bearerToken(request), secret);
+    if (claims) await db.revokeSession(claims.jti);
+    sendJson(request, response, 204, undefined);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/auth/me") {
+    const user = currentUser(request);
+    if (!user) {
+      sendJson(request, response, 401, { error: "Sign in again." });
+      return;
+    }
+    sendJson(request, response, 200, publicUser(user));
+    return;
+  }
+
+  return false;
+};
+
+const handleTasks = async (request, response, url) => {
+  const user = currentUser(request);
+  if (!user) {
+    sendJson(request, response, 401, { error: "Sign in again." });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/tasks") {
+    const snapshot = db.getTasks(user.id);
+    if (!snapshot) {
+      sendJson(request, response, 404, { error: "Could not load tasks." });
+      return;
+    }
+    sendJson(request, response, 200, snapshot);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/events") {
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      ...corsHeaders(request),
+    });
+    const snapshot = db.getTasks(user.id);
+    response.write(`data: ${JSON.stringify({ revision: snapshot?.revision ?? 0 })}\n\n`);
+    const group = listeners.get(user.id) ?? new Set();
+    group.add(response);
+    listeners.set(user.id, group);
+    request.on("close", () => {
+      group.delete(response);
+      if (group.size === 0) listeners.delete(user.id);
+    });
+    return;
+  }
+
+  if (request.method === "PUT" && url.pathname === "/api/tasks") {
+    const expected = Number(request.headers["if-match"]);
+    if (!Number.isInteger(expected) || String(expected) !== String(request.headers["if-match"]).trim()) {
+      sendJson(request, response, 400, { error: "If-Match revision is required" });
+      return;
+    }
+    let parsed;
+    try {
+      parsed = await readBody(request, 5_000_000);
+    } catch (error) {
+      sendJson(request, response, error.status ?? 400, { error: "Tasks could not be read" });
+      return;
+    }
+    const saved = await db.saveTasks(user.id, expected, normalizeDocument(parsed));
+    if (saved.missing) {
+      sendJson(request, response, 404, { error: "Could not save tasks." });
+      return;
+    }
+    if (saved.conflict) {
+      sendJson(request, response, 409, {
+        error: "conflict",
+        revision: saved.snapshot.revision,
+        document: saved.snapshot.document,
+      });
+      return;
+    }
+    notify(user.id, saved.snapshot.revision);
+    sendJson(request, response, 200, saved.snapshot);
+    return;
+  }
+
+  sendJson(request, response, 404, { error: "Not found" });
+};
+
 const handleApi = async (request, response, url) => {
   if (request.method === "OPTIONS") {
     response.writeHead(204, corsHeaders(request));
@@ -139,58 +317,17 @@ const handleApi = async (request, response, url) => {
     sendJson(request, response, 200, { ok: true });
     return;
   }
-  if (!authorized(request)) {
-    sendJson(request, response, 401, { error: "Passphrase was not accepted" });
+  if (url.pathname.startsWith("/api/auth/")) {
+    const handled = await handleAuth(request, response, url);
+    if (handled === false) sendJson(request, response, 404, { error: "Not found" });
     return;
   }
-  if (request.method === "GET" && url.pathname === "/api/document") {
-    sendJson(request, response, 200, state);
-    return;
-  }
-  if (request.method === "GET" && url.pathname === "/api/events") {
-    response.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      ...corsHeaders(request),
-    });
-    response.write(`data: ${JSON.stringify({ revision: state.revision })}\n\n`);
-    listeners.add(response);
-    request.on("close", () => listeners.delete(response));
-    return;
-  }
-  if (request.method === "PUT" && url.pathname === "/api/document") {
-    await enqueue(async () => {
-      const expected = Number(request.headers["if-match"]);
-      if (!Number.isInteger(expected) || String(expected) !== String(request.headers["if-match"]).trim()) {
-        sendJson(request, response, 400, { error: "If-Match revision is required" });
-        return;
-      }
-      if (expected !== state.revision) {
-        sendJson(request, response, 409, {
-          error: "conflict",
-          revision: state.revision,
-          document: state.document,
-        });
-        return;
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(await readBody(request));
-      } catch (error) {
-        sendJson(request, response, error.status ?? 400, { error: "Document could not be read" });
-        return;
-      }
-      const next = { revision: state.revision + 1, document: normalizeDocument(parsed) };
-      await persist(next);
-      sendJson(request, response, 200, next);
-    });
+  if (url.pathname === "/api/tasks" || url.pathname === "/api/events") {
+    await handleTasks(request, response, url);
     return;
   }
   sendJson(request, response, 404, { error: "Not found" });
 };
-
-await loadState();
 
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
