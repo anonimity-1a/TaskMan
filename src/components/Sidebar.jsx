@@ -93,6 +93,9 @@ export function Sidebar({
   doc,
   view,
   counts,
+  mobileOpen = false,
+  onClose,
+  onDisconnect,
   onView,
   onAddProject,
   onRenameProject,
@@ -126,10 +129,21 @@ export function Sidebar({
   ];
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-stone-200 bg-white">
+    <>
+    {mobileOpen ? (
+      <button
+        type="button"
+        aria-label="Close menu"
+        className="fixed inset-0 z-30 bg-stone-900/30 md:hidden"
+        onClick={onClose}
+      />
+    ) : null}
+    <aside
+      className={`${mobileOpen ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-72 shrink-0 flex-col border-r border-stone-200 bg-white md:static md:flex`}
+    >
       <div className="px-5 pt-5 pb-3">
-        <p className="text-sm font-semibold tracking-tight text-stone-900">Local Tasks</p>
-        <p className="text-xs text-stone-500">Stored on this computer</p>
+        <p className="text-sm font-semibold tracking-tight text-stone-900">TaskMan</p>
+        <p className="text-xs text-stone-500">Shared with your other devices</p>
       </div>
       <nav className="px-2" aria-label="Views">
         {nav.map((item) => {
@@ -296,8 +310,18 @@ export function Sidebar({
             ))
           )}
         </Collection>
+        {onDisconnect ? (
+          <button
+            type="button"
+            onClick={onDisconnect}
+            className="mt-6 px-3 text-left text-xs text-stone-400 hover:text-stone-700"
+          >
+            Change server
+          </button>
+        ) : null}
       </div>
     </aside>
+    </>
   );
 }
 

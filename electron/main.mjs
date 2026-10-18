@@ -1,18 +1,57 @@
 import { app, BrowserWindow, ipcMain, session } from "electron";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadDocument, saveDocument } from "./store.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 
-app.setPath("userData", path.join(app.getPath("appData"), "local-tasks"));
+app.setPath("userData", path.join(app.getPath("appData"), "TaskMan"));
 
-const isAllowedUrl = (url) =>
-  url.startsWith("file://") ||
-  url.startsWith("http://localhost:5173") ||
-  url.startsWith("http://127.0.0.1:5173") ||
-  url.startsWith("devtools://");
+const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:8787",
+  "http://127.0.0.1:8787",
+]);
+
+const connectionFile = () => path.join(app.getPath("userData"), "connection.json");
+const legacyFile = () => path.join(app.getPath("appData"), "local-tasks", "data.json");
+
+const normalizeConnection = (value) => {
+  if (!value || typeof value.token !== "string" || !value.token.trim()) return null;
+  let url;
+  try {
+    url = new URL(value.url);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  return { url: url.origin, token: value.token.trim() };
+};
+
+const remember = (connection) => {
+  if (connection) allowedOrigins.add(connection.url);
+};
+
+const readConnection = async () => {
+  try {
+    const connection = normalizeConnection(JSON.parse(await readFile(connectionFile(), "utf8")));
+    remember(connection);
+    return connection;
+  } catch {
+    return null;
+  }
+};
+
+const isAllowedUrl = (url) => {
+  if (url.startsWith("file://") || url.startsWith("devtools://")) return true;
+  try {
+    return allowedOrigins.has(new URL(url).origin);
+  } catch {
+    return false;
+  }
+};
 
 const createWindow = () => {
   const window = new BrowserWindow({
@@ -20,7 +59,7 @@ const createWindow = () => {
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    title: "Local Tasks",
+    title: "TaskMan",
     backgroundColor: "#fafaf9",
     autoHideMenuBar: true,
     webPreferences: {
@@ -43,18 +82,31 @@ const createWindow = () => {
   }
 };
 
-app.whenReady().then(() => {
-  const userData = app.getPath("userData");
-  session.defaultSession.webRequest.onBeforeRequest(
-    { urls: ["*://*/*"] },
-    (details, callback) => {
-      callback({ cancel: !isAllowedUrl(details.url) });
-    },
-  );
-  ipcMain.handle("store:load", () => loadDocument(userData));
-  ipcMain.handle("store:save", (_event, document) =>
-    saveDocument(userData, document),
-  );
+app.whenReady().then(async () => {
+  await readConnection();
+  session.defaultSession.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, (details, callback) => {
+    callback({ cancel: !isAllowedUrl(details.url) });
+  });
+  ipcMain.handle("connection:get", () => readConnection());
+  ipcMain.handle("connection:set", async (_event, input) => {
+    const connection = normalizeConnection(input);
+    if (!connection) throw new Error("Enter a server address and passphrase.");
+    await mkdir(app.getPath("userData"), { recursive: true });
+    await writeFile(connectionFile(), JSON.stringify(connection), "utf8");
+    remember(connection);
+    return connection;
+  });
+  ipcMain.handle("connection:clear", async () => {
+    await writeFile(connectionFile(), "{}", "utf8").catch(() => undefined);
+    return null;
+  });
+  ipcMain.handle("store:legacy", async () => {
+    try {
+      return JSON.parse(await readFile(legacyFile(), "utf8"));
+    } catch {
+      return null;
+    }
+  });
   createWindow();
 });
 

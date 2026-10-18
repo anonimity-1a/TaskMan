@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleHelp, Columns3, List, Plus } from "lucide-react";
-import { loadDocument, saveDocument } from "./api.js";
+import { CircleHelp, Columns3, List, Menu, Plus } from "lucide-react";
+import {
+  connectTaskMan,
+  disconnectTaskMan,
+  findLegacyDocument,
+  loadSnapshot,
+  saveSnapshot,
+  watchRevisions,
+} from "./api.js";
+import { getConnection, loadStoredConnection } from "./connection.js";
 import { Board } from "./components/Board.jsx";
+import { ConnectScreen } from "./components/ConnectScreen.jsx";
 import { HelpDialog } from "./components/HelpDialog.jsx";
 import { MonthBoard } from "./components/MonthBoard.jsx";
 import { QuickAdd } from "./components/QuickAdd.jsx";
@@ -72,26 +81,125 @@ export function App() {
   const [alertsGranted, setAlertsGranted] = useState(
     () => typeof Notification !== "undefined" && Notification.permission === "granted",
   );
+  const [connection, setConnection] = useState(undefined);
+  const [legacy, setLegacy] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const searchRef = useRef(null);
   const priorView = useRef({ kind: "today" });
   const firedReminders = useRef(new Set());
+  const revisionRef = useRef(0);
+  const savingRef = useRef(0);
+  const docRef = useRef(null);
+  const pendingRef = useRef(null);
+  const pumpingRef = useRef(false);
   const today = localISODate();
 
   useEffect(() => {
-    loadDocument()
-      .then(setDoc)
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Could not load tasks"));
+    let cancelled = false;
+    loadStoredConnection().then((stored) => {
+      if (!cancelled) setConnection(stored);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const commit = useCallback(async (next) => {
+  useEffect(() => {
+    if (!connection) return undefined;
+    let cancelled = false;
+    loadSnapshot(connection)
+      .then(async (snapshot) => {
+        if (cancelled) return;
+        revisionRef.current = snapshot.revision;
+        docRef.current = snapshot.document;
+        setDoc(snapshot.document);
+        setError("");
+        const previous = await findLegacyDocument(snapshot.document);
+        if (!cancelled) setLegacy(previous);
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : "Could not load tasks");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connection]);
+
+  useEffect(() => {
+    if (!connection) return undefined;
+    const controller = new AbortController();
+    watchRevisions(connection, controller.signal, (revision) => {
+      if (revision === revisionRef.current || savingRef.current > 0) return;
+      loadSnapshot(connection)
+        .then((snapshot) => {
+          if (snapshot.revision !== revisionRef.current && savingRef.current === 0) {
+            revisionRef.current = snapshot.revision;
+            docRef.current = snapshot.document;
+            setDoc(snapshot.document);
+          }
+        })
+        .catch(() => undefined);
+    });
+    const onFocus = () => {
+      if (savingRef.current > 0) return;
+      loadSnapshot(connection)
+        .then((snapshot) => {
+          if (snapshot.revision !== revisionRef.current && savingRef.current === 0) {
+            revisionRef.current = snapshot.revision;
+            docRef.current = snapshot.document;
+            setDoc(snapshot.document);
+          }
+        })
+        .catch(() => undefined);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      controller.abort();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [connection]);
+
+  const commit = useCallback((next) => {
+    pendingRef.current = next;
     setDoc(next);
-    try {
-      const saved = await saveDocument(next);
-      setDoc(saved);
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not save tasks");
-    }
+    if (pumpingRef.current) return;
+    const pump = async () => {
+      pumpingRef.current = true;
+      while (pendingRef.current) {
+        const toSave = pendingRef.current;
+        pendingRef.current = null;
+        savingRef.current += 1;
+        try {
+          const saved = await saveSnapshot(toSave, revisionRef.current);
+          revisionRef.current = saved.revision;
+          docRef.current = saved.document;
+          if (!pendingRef.current) setDoc(saved.document);
+          setError("");
+        } catch (reason) {
+          pendingRef.current = null;
+          if (reason?.status === 409 && reason.document) {
+            revisionRef.current = reason.revision;
+            docRef.current = reason.document;
+            setDoc(reason.document);
+            setToast("Updated on another device");
+            setError("");
+          } else {
+            setDoc(docRef.current);
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : "Could not reach TaskMan. This change was not saved.",
+            );
+          }
+        } finally {
+          savingRef.current -= 1;
+        }
+      }
+      pumpingRef.current = false;
+    };
+    pump();
   }, []);
 
   const changeView = useCallback((next) => {
@@ -177,7 +285,7 @@ export function App() {
       for (const task of due) {
         try {
           if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-            new Notification("Local Tasks", { body: task.title });
+            new Notification("TaskMan", { body: task.title });
           }
         } catch {
           /* The in-app reminder still shows. */
@@ -206,10 +314,42 @@ export function App() {
     }
   };
 
+  const leaveServer = async () => {
+    await disconnectTaskMan();
+    revisionRef.current = 0;
+    docRef.current = null;
+    setDoc(null);
+    setLegacy(null);
+    setConnection(null);
+    setError("");
+  };
+
+  if (connection === undefined) {
+    return (
+      <main className="grid h-full place-items-center text-sm text-stone-500">Loading tasks…</main>
+    );
+  }
+
+  if (!connection) {
+    return (
+      <ConnectScreen
+        onConnect={async (input) => {
+          await connectTaskMan(input);
+          setConnection(getConnection());
+        }}
+      />
+    );
+  }
+
   if (!doc || !selection || !counts) {
     return (
-      <main className="grid h-full place-items-center text-sm text-stone-500">
-        {error || "Loading tasks…"}
+      <main className="grid h-full place-items-center gap-3 px-6 text-center text-sm text-stone-500">
+        <p>{error || "Loading tasks…"}</p>
+        {error ? (
+          <button type="button" onClick={leaveServer} className="text-indigo-700">
+            Change server
+          </button>
+        ) : null}
       </main>
     );
   }
@@ -239,7 +379,13 @@ export function App() {
         doc={doc}
         view={view}
         counts={counts}
-        onView={changeView}
+        mobileOpen={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onDisconnect={leaveServer}
+        onView={(next) => {
+          changeView(next);
+          setMenuOpen(false);
+        }}
         onAddProject={(name) => commit(addProject(doc, name))}
         onRenameProject={(id, name) => commit(renameProject(doc, id, name))}
         onDeleteProject={(id) => {
@@ -266,15 +412,25 @@ export function App() {
         onFavoriteFilter={(id) => commit(toggleFavorite(doc, "filter", id))}
       />
       <main className="relative flex min-w-0 flex-1 flex-col bg-stone-50">
-        <header className="flex flex-wrap items-center justify-between gap-3 px-8 pt-6 pb-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold tracking-tight text-stone-900">
-              {heading}
-            </h1>
-            <p className="text-sm text-stone-500">
-              {selection.open.length} open
-              {project?.archived ? " · Archived" : ""}
-            </p>
+        <header className="flex flex-wrap items-center justify-between gap-3 px-4 pt-5 pb-4 md:px-8 md:pt-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              aria-label="Open menu"
+              onClick={() => setMenuOpen(true)}
+              className="rounded-lg p-2 text-stone-600 hover:bg-stone-200/70 md:hidden"
+            >
+              <Menu className="size-5" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-semibold tracking-tight text-stone-900">
+                {heading}
+              </h1>
+              <p className="text-sm text-stone-500">
+                {selection.open.length} open
+                {project?.archived ? " · Archived" : ""}
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative">
@@ -414,8 +570,28 @@ export function App() {
             </button>
           </form>
         ) : null}
+        {legacy ? (
+          <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900 md:mx-8">
+            <p>Tasks already on this computer can be copied to the server.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setLegacy(null)} className="px-2 py-1">
+                Skip
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  commit(legacy);
+                  setLegacy(null);
+                }}
+                className="rounded-lg bg-indigo-600 px-3 py-1 text-white"
+              >
+                Copy to server
+              </button>
+            </div>
+          </div>
+        ) : null}
         {error ? (
-          <p className="mx-8 mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+          <p className="mx-4 mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 md:mx-8">{error}</p>
         ) : null}
         <div
           className={`mx-8 mb-8 min-h-0 flex-1 rounded-2xl border border-stone-200 bg-white shadow-sm ${

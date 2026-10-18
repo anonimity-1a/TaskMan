@@ -35,7 +35,7 @@ export function TaskDetail({
   const repeatValue = recurrenceKey(task.recurrence);
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-30 flex w-[24rem] max-w-full flex-col border-l border-stone-200 bg-white shadow-xl">
+    <aside className="absolute inset-0 z-30 flex w-full flex-col border-l border-stone-200 bg-white shadow-xl md:inset-y-0 md:right-0 md:left-auto md:w-[24rem]">
       <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
         <h2 className="text-sm font-semibold text-stone-800">Task</h2>
         <button
