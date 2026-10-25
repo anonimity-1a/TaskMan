@@ -7,7 +7,7 @@ function NameField({ placeholder, onSubmit, extra }) {
   const [query, setQuery] = useState("");
   return (
     <form
-      className="mt-3 flex flex-wrap items-center gap-2"
+      className="tm-rule mt-4 flex flex-wrap items-center gap-2 border-t pt-4"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit(value, query);
@@ -20,7 +20,7 @@ function NameField({ placeholder, onSubmit, extra }) {
         onChange={(event) => setValue(event.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="w-40 rounded-md border border-white/10 bg-transparent px-2 py-1.5 text-sm outline-none"
+        className="tm-rule w-40 rounded-md border bg-[var(--field)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--accent)]"
       />
       {extra ? (
         <input
@@ -28,10 +28,13 @@ function NameField({ placeholder, onSubmit, extra }) {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="today p1, @label, #project"
           aria-label="Filter query"
-          className="w-56 rounded-md border border-white/10 bg-transparent px-2 py-1.5 text-sm outline-none"
+          className="tm-mono tm-rule w-56 rounded-md border bg-[var(--field)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--accent)]"
         />
       ) : null}
-      <button type="submit" className="text-sm text-[var(--accent)]">
+      <button
+        type="submit"
+        className="tm-btn bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]"
+      >
         Add
       </button>
     </form>
@@ -52,25 +55,25 @@ export function BrowseView({
   onRenameFilter,
 }) {
   return (
-    <div className="grid gap-10 md:grid-cols-2">
-      <section>
-        <h2 className="text-sm font-medium text-neutral-200">Labels</h2>
-        <ul className="mt-3 divide-y divide-white/5">
+    <div className="grid gap-5 md:grid-cols-2">
+      <section className="tm-rule rounded-lg border bg-[var(--panel)] p-6">
+        <h2 className="tm-eyebrow">Labels</h2>
+        <ul className="mt-3 divide-y divide-[var(--rule)]">
           {doc.labels.length === 0 ? (
             <li className="py-3 text-sm text-neutral-500">No labels yet.</li>
           ) : (
             doc.labels.map((label) => {
               const styles = COLOR_STYLES[label.color] ?? COLOR_STYLES.indigo;
               return (
-                <li key={label.id} className="flex items-center gap-2 py-2">
+                <li key={label.id} className="group flex items-center gap-3 py-2.5">
                   <button
                     type="button"
                     onClick={() => onOpenLabel(label.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left text-sm text-neutral-200 hover:text-white"
                   >
-                    <span className={`size-2.5 rounded-full ${styles.dot}`} />
+                    <span className={`tm-check size-2.5 shrink-0 ${styles.dot}`} />
                     <span className="truncate">{label.name}</span>
-                    <span className="ml-auto text-xs text-neutral-500">{counts.labels[label.id] ?? 0}</span>
+                    <span className="tm-mono ml-auto text-[11px] text-neutral-500">{counts.labels[label.id] ?? 0}</span>
                   </button>
                   <button
                     type="button"
@@ -85,7 +88,7 @@ export function BrowseView({
                   <button
                     type="button"
                     onClick={() => onDeleteLabel(label.id)}
-                    className="text-xs text-neutral-500 hover:text-[var(--accent)]"
+                    className="text-xs text-neutral-500 hover:text-[var(--danger)]"
                   >
                     Delete
                   </button>
@@ -96,23 +99,23 @@ export function BrowseView({
         </ul>
         <NameField placeholder="Add label" onSubmit={(name) => onAddLabel(name)} />
       </section>
-      <section>
-        <h2 className="text-sm font-medium text-neutral-200">Filters</h2>
-        <ul className="mt-3 divide-y divide-white/5">
+      <section className="tm-rule rounded-lg border bg-[var(--panel)] p-6">
+        <h2 className="tm-eyebrow">Filters</h2>
+        <ul className="mt-3 divide-y divide-[var(--rule)]">
           {doc.filters.length === 0 ? (
             <li className="py-3 text-sm text-neutral-500">No saved filters yet.</li>
           ) : (
             doc.filters.map((filter) => (
-              <li key={filter.id} className="flex items-center gap-2 py-2">
+              <li key={filter.id} className="flex items-center gap-3 py-2.5">
                 <button
                   type="button"
                   onClick={() => onOpenFilter(filter.id)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <span className="block truncate text-sm">{filter.name}</span>
-                  <span className="block truncate text-xs text-neutral-500">{filter.query}</span>
+                  <span className="block truncate text-sm text-neutral-200">{filter.name}</span>
+                  <span className="tm-mono block truncate text-[11px] text-neutral-500">{filter.query}</span>
                 </button>
-                <span className="text-xs text-neutral-500">{counts.filters[filter.id] ?? 0}</span>
+                <span className="tm-mono text-[11px] text-neutral-500">{counts.filters[filter.id] ?? 0}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -126,7 +129,7 @@ export function BrowseView({
                 <button
                   type="button"
                   onClick={() => onDeleteFilter(filter.id)}
-                  className="text-xs text-neutral-500 hover:text-[var(--accent)]"
+                  className="text-xs text-neutral-500 hover:text-[var(--danger)]"
                 >
                   Delete
                 </button>
@@ -138,11 +141,11 @@ export function BrowseView({
         <button
           type="button"
           onClick={onOpenCompleted}
-          className="mt-6 inline-flex items-center gap-2 text-sm text-neutral-300 hover:text-white"
+          className="tm-rule mt-6 inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white"
         >
-          <CheckCircle2 className="size-4" />
+          <CheckCircle2 className="size-4 text-[var(--success)]" />
           Completed tasks
-          <span className="text-xs text-neutral-500">{counts.completed}</span>
+          <span className="tm-mono text-[11px] text-neutral-500">{counts.completed}</span>
         </button>
       </section>
     </div>

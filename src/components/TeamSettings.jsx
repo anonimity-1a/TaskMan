@@ -3,9 +3,9 @@ import { Check, Plus, X } from "lucide-react";
 
 const SIZES = [
   ["1", "Only me (1)"],
-  ["2-7", "2 – 7"],
-  ["8-15", "8 – 15"],
-  ["16-24", "16 – 24"],
+  ["2-7", "2 â€“ 7"],
+  ["8-15", "8 â€“ 15"],
+  ["16-24", "16 â€“ 24"],
   ["25+", "25+"],
 ];
 
@@ -68,7 +68,7 @@ const readImage = (file) =>
 
 function PerkPanel({ onClose }) {
   return (
-    <aside className="hidden w-72 shrink-0 border-l border-white/10 bg-[#242424] p-5 md:block">
+    <aside className="hidden w-72 shrink-0 border-l border-white/10 bg-[var(--panel-2)] p-5 md:block">
       <div className="mb-4 flex justify-end">
         <button type="button" aria-label="Close create team" onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-white/5">
           <X className="size-4" />
@@ -78,7 +78,7 @@ function PerkPanel({ onClose }) {
       <ul className="mt-4 space-y-2 text-sm text-neutral-300">
         {PERKS.map((item) => (
           <li key={item} className="flex items-start gap-2">
-            <Check className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+            <Check className="mt-0.5 size-4 shrink-0 text-[var(--success)]" />
             {item}
           </li>
         ))}
@@ -120,12 +120,12 @@ export function TeamWizard({ user, onClose, onCreate }) {
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
       onMouseDown={(event) => event.stopPropagation()}
     >
-      <div className="flex max-h-[min(640px,calc(100%-2rem))] w-[min(760px,calc(100%-1rem))] overflow-hidden rounded-xl border border-white/10 bg-[#1f1f1f] text-neutral-100 shadow-2xl">
+      <div className="tm-surface flex max-h-[min(640px,calc(100%-2rem))] w-[min(760px,calc(100%-1rem))] overflow-hidden rounded-xl text-neutral-100">
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
             {step === "name" ? (
               <>
-                <h2 className="text-xl font-semibold">Create your team</h2>
+                <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--title-ink)]">Create your team</h2>
                 <p className="mt-1 text-sm text-neutral-400">Give the team a name people will recognize.</p>
                 <label className="mt-5 block text-sm font-medium">
                   Team name
@@ -136,7 +136,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Example"
                     aria-label="Team name"
-                    className="mt-2 w-full rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 outline-none focus:border-[var(--accent)]"
+                    className="mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 outline-none focus:border-[var(--accent)]"
                   />
                   <span className="mt-1 block text-right text-xs text-neutral-500">{name.length}/120</span>
                 </label>
@@ -144,8 +144,8 @@ export function TeamWizard({ user, onClose, onCreate }) {
             ) : null}
             {step === "size" ? (
               <>
-                <h2 className="text-xl font-semibold">How many people will you work with?</h2>
-                <p className="mt-1 text-sm text-neutral-400">We’ll use your answer to set up the team.</p>
+                <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--title-ink)]">How many people will you work with?</h2>
+                <p className="mt-1 text-sm text-neutral-400">Weâ€™ll use your answer to set up the team.</p>
                 <div className="mt-4 space-y-2">
                   {SIZES.map(([id, label]) => (
                     <button
@@ -165,8 +165,8 @@ export function TeamWizard({ user, onClose, onCreate }) {
             ) : null}
             {step === "work" ? (
               <>
-                <h2 className="text-xl font-semibold">What does your team’s work look like?</h2>
-                <p className="mt-1 text-sm text-neutral-400">We’ll use your answer to set up the team.</p>
+                <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--title-ink)]">What does your teamâ€™s work look like?</h2>
+                <p className="mt-1 text-sm text-neutral-400">Weâ€™ll use your answer to set up the team.</p>
                 <div className="mt-4 space-y-2">
                   {WORK.map(([id, label, hint]) => (
                     <button
@@ -187,7 +187,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
             ) : null}
             {step === "invite" ? (
               <>
-                <h2 className="text-xl font-semibold">Invite your teammates</h2>
+                <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--title-ink)]">Invite your teammates</h2>
                 <p className="mt-1 text-sm text-neutral-400">Save the people who should join {team?.name}.</p>
                 <label className="mt-4 block text-sm font-medium">
                   Invite by email
@@ -197,7 +197,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
                     placeholder="Separate multiple emails with commas"
                     aria-label="Invite by email"
                     rows={2}
-                    className="mt-2 w-full resize-none rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-sm outline-none"
+                    className="mt-2 w-full resize-none rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm outline-none"
                   />
                 </label>
                 <p className="mt-1 text-xs text-neutral-500">Addresses are saved on the team. TaskMan does not send email.</p>
@@ -207,7 +207,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
                 </label>
                 <p className="mt-1 text-xs text-neutral-500">Saved for later. People are not added from an email domain automatically.</p>
                 {discovery && generic ? (
-                  <p className="mt-3 text-sm text-[var(--accent)]">You appear to be using a generic email domain.</p>
+                  <p className="mt-3 text-sm text-[var(--warn)]">You appear to be using a generic email domain.</p>
                 ) : null}
               </>
             ) : null}
@@ -218,7 +218,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
                 type="button"
                 disabled={!name.trim()}
                 onClick={() => setStep("size")}
-                className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-white disabled:opacity-40"
+                className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-[var(--on-accent)] disabled:opacity-40"
               >
                 Continue
               </button>
@@ -228,7 +228,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
                 type="button"
                 disabled={!size}
                 onClick={() => setStep("work")}
-                className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-white disabled:opacity-40"
+                className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-[var(--on-accent)] disabled:opacity-40"
               >
                 Continue
               </button>
@@ -238,14 +238,14 @@ export function TeamWizard({ user, onClose, onCreate }) {
                 type="button"
                 disabled={!work}
                 onClick={create}
-                className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-white disabled:opacity-40"
+                className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-[var(--on-accent)] disabled:opacity-40"
               >
                 Create your team
               </button>
             ) : null}
             {step === "invite" ? (
               <div className="space-y-2">
-                <button type="button" onClick={finish} className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-white">
+                <button type="button" onClick={finish} className="w-full rounded-md bg-[var(--accent)] py-2 text-sm font-medium text-[var(--on-accent)]">
                   Continue
                 </button>
                 <button
@@ -270,7 +270,7 @@ export function TeamWizard({ user, onClose, onCreate }) {
         <PerkPanel onClose={() => (team ? onClose(team.id) : onClose())} />
       </div>
       {notice ? (
-        <p className="fixed bottom-4 left-4 z-[70] rounded-lg bg-[#2a2a2a] px-3 py-2 text-sm text-white shadow-lg">
+        <p className="fixed bottom-4 left-4 z-[70] rounded-lg bg-[var(--field)] px-3 py-2 text-sm text-white shadow-lg">
           {notice}
           <button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")} className="ml-3 text-neutral-400">
             <X className="inline size-3.5" />
@@ -294,7 +294,7 @@ export function TeamGeneral({ team, onChange, onDelete }) {
           {team.logo ? (
             <img src={team.logo} alt="" className="size-14 rounded-lg object-cover" />
           ) : (
-            <span className="grid size-14 place-items-center rounded-lg bg-[#4073ff] text-xl font-semibold text-white">{initial}</span>
+            <span className="grid size-14 place-items-center rounded-lg bg-[var(--accent)] text-xl font-semibold text-[var(--on-accent)]">{initial}</span>
           )}
           <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md bg-white/10 px-3 py-1.5 text-sm">
             Upload logo
@@ -318,7 +318,7 @@ export function TeamGeneral({ team, onChange, onDelete }) {
           />
         </div>
         <p className="mt-2 text-xs text-neutral-500">Pick a photo up to 4MB.</p>
-        {error ? <p className="mt-1 text-sm text-[var(--accent)]">{error}</p> : null}
+        {error ? <p className="mt-1 text-sm text-[var(--danger)]">{error}</p> : null}
       </section>
       <label className="block">
         <span className="text-sm font-medium">Team name</span>
@@ -327,9 +327,9 @@ export function TeamGeneral({ team, onChange, onDelete }) {
           maxLength={120}
           onChange={(event) => onChange({ ...team, name: event.target.value })}
           aria-label="Team name"
-          className="mt-2 w-full rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-sm outline-none"
+          className="mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm outline-none"
         />
-        <span className="mt-1 block text-xs text-neutral-500">Keep it simple — something your teammates will recognize.</span>
+        <span className="mt-1 block text-xs text-neutral-500">Keep it simple â€” something your teammates will recognize.</span>
       </label>
       <section>
         <h3 className="text-sm font-medium">Projects</h3>
@@ -339,7 +339,7 @@ export function TeamGeneral({ team, onChange, onDelete }) {
             value={team.access}
             aria-label="Default access level"
             onChange={(event) => onChange({ ...team, access: event.target.value })}
-            className="mt-2 w-full rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2"
+            className="mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2"
           >
             <option value="team">Team</option>
             <option value="restricted">Restricted</option>
@@ -348,7 +348,7 @@ export function TeamGeneral({ team, onChange, onDelete }) {
         <p className="mt-1 text-xs text-neutral-500">New projects created in this team use this access level.</p>
         <p className="mt-4 text-sm font-medium">Default collaborators</p>
         <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-2 py-1 text-xs">
-          Everyone in “{team.name}”
+          Everyone in â€œ{team.name}â€
         </p>
         <p className="mt-2 text-xs text-neutral-500">Saved members are kept with the team. TaskMan does not share projects with other accounts yet.</p>
       </section>
@@ -369,7 +369,7 @@ export function TeamGeneral({ team, onChange, onDelete }) {
           type="button"
           disabled={confirmName.trim() !== team.name}
           onClick={onDelete}
-          className="mt-3 rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent)] disabled:opacity-40"
+          className="mt-3 rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent-text)] disabled:opacity-40"
         >
           Delete team
         </button>
@@ -398,15 +398,15 @@ export function TeamPeople({ team, user, onChange }) {
             aria-checked={team.inviteEnabled}
             aria-label="Enable invite link"
             onClick={() => onChange({ ...team, inviteEnabled: !team.inviteEnabled })}
-            className={`relative h-6 w-11 rounded-full ${team.inviteEnabled ? "bg-[var(--accent)]" : "bg-[#3a3a3a]"}`}
+            className={`relative h-6 w-11 rounded-full ${team.inviteEnabled ? "bg-[var(--accent)]" : "bg-white/15"}`}
           >
-            <span className={`absolute top-0.5 size-5 rounded-full bg-white ${team.inviteEnabled ? "right-0.5" : "left-0.5"}`} />
+            <span className={`absolute top-0.5 size-5 rounded-full bg-[var(--knob)] ${team.inviteEnabled ? "right-0.5" : "left-0.5"}`} />
           </button>
           <span className="text-sm">Enable invite link</span>
         </div>
         {team.inviteEnabled ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input readOnly value={link} aria-label="Invite link" className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#2a2a2a] px-2 py-1.5 text-xs" />
+            <input readOnly value={link} aria-label="Invite link" className="min-w-0 flex-1 rounded-md border border-white/10 bg-[var(--field)] px-2 py-1.5 text-xs" />
             <button
               type="button"
               onClick={async () => {
@@ -424,7 +424,7 @@ export function TeamPeople({ team, user, onChange }) {
             <button
               type="button"
               onClick={() => onChange({ ...team, inviteCode: crypto.randomUUID().replaceAll("-", "") })}
-              className="rounded-md border border-[var(--accent)] px-2 py-1.5 text-xs text-[var(--accent)]"
+              className="rounded-md border border-[var(--accent)] px-2 py-1.5 text-xs text-[var(--accent-text)]"
             >
               Reset link
             </button>
@@ -457,7 +457,7 @@ export function TeamPeople({ team, user, onChange }) {
           aria-label="Invite by email"
           className="min-w-48 flex-1 rounded-md border border-white/10 bg-transparent px-3 py-1.5 text-sm outline-none"
         />
-        <button type="submit" className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-white">
+        <button type="submit" className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-[var(--on-accent)]">
           Invite by email
         </button>
       </form>
@@ -477,7 +477,7 @@ export function TeamPeople({ team, user, onChange }) {
         <ul className="mt-3 space-y-2">
           {people.map((person) => (
             <li key={person.id} className="flex items-center gap-3 text-sm">
-              <span className="grid size-8 place-items-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
+              <span className="grid size-8 place-items-center rounded-full bg-[var(--accent)] text-xs font-semibold text-[var(--on-accent)]">
                 {person.name.slice(0, 1).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">

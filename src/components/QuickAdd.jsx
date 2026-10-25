@@ -133,11 +133,11 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
   const repeatValue = recurrenceTouched ? recurrenceKey(recurrence) : recurrenceKey(resolved.recurrence);
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/60" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px]" onMouseDown={onClose}>
       <form
         role="dialog"
         aria-labelledby="quick-add-title"
-        className="mx-auto mt-20 w-[min(40rem,calc(100%-2rem))] rounded-2xl border border-white/10 bg-[var(--panel)] p-4 text-neutral-100 shadow-2xl"
+        className="tm-surface mx-auto mt-[12vh] w-[min(42rem,calc(100%-2rem))] overflow-hidden rounded-xl text-neutral-100"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
@@ -148,10 +148,14 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
           });
         }}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 id="quick-add-title" className="text-sm font-semibold text-white">
-            Quick add
+        <div className="tm-rule flex items-center gap-2 border-b bg-white/[0.02] px-5 py-2.5">
+          <h2 id="quick-add-title" className="tm-eyebrow">
+            New task
           </h2>
+          {parent ? (
+            <span className="tm-eyebrow truncate normal-case! tracking-normal!">/ Subtask of {parent.title}</span>
+          ) : null}
+          <span className="tm-kbd ml-auto">Esc</span>
           <button
             type="button"
             aria-label="Close quick add"
@@ -161,24 +165,22 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
             <X className="size-4" />
           </button>
         </div>
-        {parent ? (
-          <p className="mb-2 text-xs text-stone-500">Subtask of {parent.title}</p>
-        ) : null}
+        <div className="px-5 pt-4 pb-4">
         <input
           autoFocus
           value={raw}
           onChange={(event) => setRaw(event.target.value)}
           placeholder="Pay rent tomorrow !!1 every month #Home"
-          className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 text-base outline-none focus:border-[var(--accent)]"
+          className="w-full bg-transparent font-display text-xl font-semibold tracking-tight outline-none placeholder:font-normal placeholder:text-neutral-600"
         />
-        <p className="mt-2 text-xs text-stone-500">
-          {resolved.title || "Task name"}
-          {project ? ` · ${project.name}` : ""}
-          {resolved.due ? ` · ${formatWhen(resolved.due, resolved.dueTime, today)}` : ""}
-          {resolved.recurrence ? ` · ${describeRecurrence(resolved.recurrence)}` : ""}
-          {resolved.priority < 4 ? ` · P${resolved.priority}` : ""}
-          {labels.map((label) => ` · @${label.name}`).join("")}
-          {resolved.newLabels.map((name) => ` · @${name}`).join("")}
+        <p className="tm-mono mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-neutral-400">
+          <span className={resolved.title ? "text-neutral-200" : ""}>{resolved.title || "Task name"}</span>
+          {project ? <span className="text-[var(--accent-text)]">#{project.name}</span> : null}
+          {resolved.due ? <span className="text-[var(--mark)]">{formatWhen(resolved.due, resolved.dueTime, today)}</span> : null}
+          {resolved.recurrence ? <span>↻ {describeRecurrence(resolved.recurrence)}</span> : null}
+          {resolved.priority < 4 ? <span className={PRIORITY_META[resolved.priority]?.text}>P{resolved.priority}</span> : null}
+          {labels.map((label) => <span key={label.id}>@{label.name}</span>)}
+          {resolved.newLabels.map((name) => <span key={name}>@{name}</span>)}
         </p>
         {settings?.quickAdd?.showDescription ? (
           <textarea
@@ -187,15 +189,15 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
             placeholder="Description"
             aria-label="Description"
             rows={2}
-            className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            className="tm-rule mt-3 w-full resize-none rounded-md border bg-[var(--field)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
           />
         ) : null}
-        <p className="mt-1 text-xs text-stone-400">
+        <p className="mt-3 text-xs leading-relaxed text-neutral-500">
           {settings?.smartDates === false
             ? "Dates in the title are left as text. Use the date action to set one."
             : "Dates, !!1–!!4, p1–p4, #project, @label, every week, and at 9am are read from the title."}
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
           {(settings?.quickAdd?.shown ?? ["project", "date", "priority"]).map((id) => {
             const action = QUICK_ACTIONS.find((item) => item.id === id);
             const Icon = ICONS[id] ?? Hash;
@@ -206,8 +208,10 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
                 type="button"
                 aria-pressed={active}
                 onClick={() => setOpenAction(active ? "" : id)}
-                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
-                  active ? "border-[var(--accent)] text-white" : "border-white/10 text-neutral-300"
+                className={`tm-chip inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium ${
+                  active
+                    ? "border-[var(--accent)] bg-[var(--selected)] text-white"
+                    : "tm-rule text-neutral-300 hover:bg-white/5"
                 }`}
               >
                 <Icon className="size-3.5" />
@@ -337,7 +341,7 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
                       return base.includes(label.id) ? base.filter((item) => item !== label.id) : [...base, label.id];
                     });
                   }}
-                  className={`rounded-full px-2.5 py-1 text-xs ${selected ? styles.chip : "bg-white/5 text-neutral-400"}`}
+                  className={`tm-chip px-2.5 py-1 text-xs font-medium ${selected ? styles.chip : "bg-white/5 text-neutral-400"}`}
                 >
                   {label.name}
                 </button>
@@ -363,20 +367,22 @@ export function QuickAdd({ doc, defaults, today, settings, onClose, onSubmit }) 
             className="mt-3 w-full rounded-md border border-white/10 bg-transparent px-2 py-1 text-sm outline-none"
           />
         ) : null}
-        <div className="mt-4 flex justify-end gap-2">
+        </div>
+        <div className="tm-rule flex items-center justify-end gap-2 border-t bg-white/[0.02] px-5 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100"
+            className="tm-btn px-3.5 py-1.5 text-sm text-neutral-300 hover:bg-white/5"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!resolved.title}
-            className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-40"
+            className="tm-btn inline-flex items-center gap-2 bg-[var(--accent)] px-4 py-1.5 text-sm font-semibold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
           >
             Add task
+            <span className="tm-mono text-[10px] font-medium opacity-70">↵</span>
           </button>
         </div>
       </form>

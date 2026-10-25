@@ -93,23 +93,26 @@ export function Sidebar({
 
   return (
     <>
-    <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-white/5 bg-[var(--sidebar)] text-neutral-200">
-      <div className="flex items-center gap-1 px-3 pt-3">
+    <aside className="tm-sidebar tm-rule flex h-full w-[272px] shrink-0 flex-col border-r bg-[var(--sidebar)] text-neutral-200">
+      <div className="flex items-center gap-1 px-3 pt-4 pb-1">
         <div className="relative min-w-0 flex-1">
           <button
             type="button"
             onClick={() => setAccountOpen((value) => !value)}
-            className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 hover:bg-white/5"
+            className="flex w-full min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1.5 hover:bg-white/5"
           >
             {avatar ? (
-              <img src={avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
+              <img src={avatar} alt="" className="tm-check size-8 shrink-0 object-cover" />
             ) : (
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white">
+              <span className="tm-check grid size-8 shrink-0 place-items-center bg-[var(--accent)] text-sm font-bold text-[var(--on-accent)]">
                 {initial}
               </span>
             )}
-            <span className="truncate text-sm font-medium text-white">{accountName || "TaskMan"}</span>
-            <ChevronDown className="size-3.5 text-neutral-500" />
+            <span className="min-w-0 text-left leading-tight">
+              <span className="block truncate text-sm font-semibold text-white">{accountName || "TaskMan"}</span>
+              <span className="tm-eyebrow block text-[9.5px]!">Workspace</span>
+            </span>
+            <ChevronDown className="ml-auto size-3.5 shrink-0 text-neutral-500" />
           </button>
           {accountOpen ? (
             <>
@@ -165,7 +168,8 @@ export function Sidebar({
         </button>
       </div>
       {bellOpen ? (
-        <div className="mx-3 mt-1 rounded-md bg-white/5 p-2 text-xs text-neutral-300">
+        <div className="tm-rule mx-3 mt-2 rounded-md border bg-white/5 p-2.5 text-xs text-neutral-300">
+          <p className="tm-eyebrow mb-1.5">Reminders</p>
           {reminders.length === 0 ? (
             <p>No reminders set.</p>
           ) : (
@@ -186,12 +190,13 @@ export function Sidebar({
       <button
         type="button"
         onClick={onQuickAdd}
-        className="mx-3 mt-3 inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:bg-[var(--accent-hover)]"
+        className="tm-btn mx-3 mt-4 flex items-center gap-2 bg-[var(--accent)] px-3 py-2.5 text-sm font-semibold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]"
       >
-        <Plus className="size-4" />
+        <Plus className="size-4" strokeWidth={2.5} />
         Add task
+        <span className="tm-mono ml-auto text-[10px] font-medium opacity-70">Ctrl K</span>
       </button>
-      <label className="mx-3 mt-3 flex items-center gap-2 rounded-md bg-white/5 px-2 py-1.5">
+      <label className="tm-rule mx-3 mt-2 flex items-center gap-2 rounded-md border bg-white/[0.03] px-2.5 py-1.5 focus-within:border-[var(--accent)]">
         <Search className="size-4 text-neutral-500" />
         <input
           ref={searchRef}
@@ -201,8 +206,9 @@ export function Sidebar({
           aria-label="Search"
           className="w-full bg-transparent py-0.5 text-sm outline-none placeholder:text-neutral-500"
         />
+        <span className="tm-kbd shrink-0">Ctrl F</span>
       </label>
-      <nav className="mt-3 px-2" aria-label="Views">
+      <nav className="mt-5 px-2" aria-label="Views">
         {nav.filter((item) => sidebarItems[item.kind] !== false).map((item) => {
           const Icon = item.icon;
           const active = view.kind === item.kind;
@@ -211,15 +217,14 @@ export function Sidebar({
             <button
               key={item.kind}
               type="button"
+              data-active={active}
               onClick={() => onView({ kind: item.kind })}
-              className={`flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm ${
-                active ? "bg-[var(--selected)] text-white" : "text-neutral-300 hover:bg-white/5"
-              }`}
+              className={`tm-nav flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-white/5 ${active ? "text-white" : "text-neutral-300"}`}
             >
-              <Icon className="size-4" aria-hidden="true" />
-              <span className="flex-1">{item.label}</span>
+              <Icon className={`size-4 ${active ? "text-[var(--accent-text)]" : "text-neutral-500"}`} aria-hidden="true" />
+              <span className={`flex-1 ${active ? "font-semibold" : ""}`}>{item.label}</span>
               {showCounts && (item.kind === "upcoming" ? count > 0 : true) ? (
-                <span className="text-xs text-neutral-500">{count}</span>
+                <span className={`tm-mono text-[11px] ${active ? "text-[var(--mark)]" : "text-neutral-500"}`}>{count}</span>
               ) : null}
             </button>
           );
@@ -227,49 +232,45 @@ export function Sidebar({
         {sidebarItems.browse !== false ? (
           <button
             type="button"
+            data-active={view.kind === "browse"}
             onClick={() => onView({ kind: "browse" })}
-            className={`mt-1 flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm ${
-              view.kind === "browse" ? "bg-[var(--selected)] text-white" : "text-neutral-300 hover:bg-white/5"
-            }`}
+            className={`tm-nav flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-white/5 ${view.kind === "browse" ? "text-white" : "text-neutral-300"}`}
           >
-            <Tags className="size-4" />
-            Filters & Labels
+            <Tags className={`size-4 ${view.kind === "browse" ? "text-[var(--accent-text)]" : "text-neutral-500"}`} />
+            <span className={view.kind === "browse" ? "font-semibold" : ""}>Filters & Labels</span>
           </button>
         ) : null}
         {sidebarItems.reporting !== false ? (
           <button
             type="button"
+            data-active={view.kind === "reporting"}
             onClick={() => onView({ kind: "reporting" })}
-            className={`flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm ${
-              view.kind === "reporting" ? "bg-[var(--selected)] text-white" : "text-neutral-300 hover:bg-white/5"
-            }`}
+            className={`tm-nav flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-white/5 ${view.kind === "reporting" ? "text-white" : "text-neutral-300"}`}
           >
-            <SlidersHorizontal className="size-4" />
-            Reporting
+            <SlidersHorizontal className={`size-4 ${view.kind === "reporting" ? "text-[var(--accent-text)]" : "text-neutral-500"}`} />
+            <span className={view.kind === "reporting" ? "font-semibold" : ""}>Reporting</span>
           </button>
         ) : null}
       </nav>
-      <div className="mt-4 flex-1 overflow-y-auto px-2 pb-3">
+      <div className="mt-6 flex-1 overflow-y-auto px-2 pb-3">
         {favorites.length > 0 ? (
-          <section className="mb-4">
-            <h2 className="px-2 text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
-              Favorites
-            </h2>
+          <section className="mb-5">
+            <h2 className="tm-eyebrow tm-ruled mb-1 px-2">Favorites</h2>
             {favorites.map(({ kind, item }) => (
               <button
                 key={`${kind}-${item.id}`}
                 type="button"
                 onClick={() => onView({ kind, id: item.id })}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-neutral-300 hover:bg-white/5"
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-sm text-neutral-300 hover:bg-white/5"
               >
-                <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                <Star className="size-3.5 fill-[var(--warn)] text-[var(--warn)]" />
                 <span className="truncate">{item.name}</span>
               </button>
             ))}
           </section>
         ) : null}
-        <div className="flex items-center px-2">
-          <h2 className="flex-1 text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
+        <div className="mb-1 flex items-center gap-1 px-2">
+          <h2 className="tm-eyebrow tm-ruled flex-1">
             My Projects
           </h2>
           <button
@@ -309,16 +310,16 @@ export function Sidebar({
         {teams.map((team) => {
           const teamRows = rows.filter(({ project }) => project.teamId === team.id);
           return (
-            <div key={team.id} className="mt-4">
-              <div className="flex items-center px-2">
+            <div key={team.id} className="mt-5">
+              <div className="flex items-center gap-1 px-2">
                 {team.logo ? (
-                  <img src={team.logo} alt="" className="mr-2 size-4 rounded object-cover" />
+                  <img src={team.logo} alt="" className="tm-check mr-1 size-4 object-cover" />
                 ) : (
-                  <span className="mr-2 grid size-4 place-items-center rounded bg-[#4073ff] text-[10px] text-white">
+                  <span className="tm-check mr-1 grid size-4 place-items-center bg-[var(--accent)] text-[10px] font-bold text-[var(--on-accent)]">
                     {team.name.slice(0, 1).toUpperCase()}
                   </span>
                 )}
-                <h2 className="flex-1 truncate text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">{team.name}</h2>
+                <h2 className="tm-eyebrow tm-ruled min-w-0 flex-1 truncate">{team.name}</h2>
                 <button
                   type="button"
                   aria-label={`Add project to ${team.name}`}
@@ -358,9 +359,9 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => setShowArchived((value) => !value)}
-              className="px-2 text-xs text-neutral-500 hover:text-neutral-300"
+              className="tm-eyebrow px-2 hover:text-neutral-300"
             >
-              Archived ({archived.length})
+              Archived · {archived.length}
             </button>
             {showArchived
               ? archived.map((project) => (
@@ -384,10 +385,11 @@ export function Sidebar({
       <button
         type="button"
         onClick={onHelp}
-        className="flex items-center gap-2 border-t border-white/5 px-4 py-3 text-sm text-neutral-400 hover:text-white"
+        className="tm-rule flex items-center gap-2.5 border-t px-5 py-3.5 text-[13px] text-neutral-400 hover:text-white"
       >
         <CircleHelp className="size-4" />
         Help & resources
+        <span className="tm-kbd ml-auto">?</span>
       </button>
     </aside>
     {projectDialog !== undefined ? (
@@ -426,7 +428,7 @@ function ProjectRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(project.name);
   return (
-    <div className={`rounded-md ${active ? "bg-[var(--selected)]" : "hover:bg-white/5"}`}>
+    <div data-active={active} className="tm-nav rounded-md hover:bg-white/5">
       {editing ? (
         <form
           className="px-2 py-1"
@@ -457,7 +459,7 @@ function ProjectRow({
               setDraft(project.name);
               setEditing(true);
             }}
-            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-sm"
+            className={`flex min-w-0 flex-1 items-center gap-2.5 py-1.5 pr-1 pl-3 text-left text-sm ${active ? "font-semibold text-white" : "text-neutral-300"}`}
           >
             <span
               role="presentation"
@@ -465,13 +467,11 @@ function ProjectRow({
                 event.stopPropagation();
                 onCycle?.();
               }}
-              className="text-xs"
-              style={{ color: projectColorHex(project.color) }}
-            >
-              #
-            </span>
+              className="tm-check size-2.5 shrink-0"
+              style={{ background: projectColorHex(project.color) }}
+            />
             <span className="truncate">{project.name}</span>
-            {count == null ? null : <span className="ml-auto text-xs text-neutral-500">{count}</span>}
+            {count == null ? null : <span className="tm-mono ml-auto text-[11px] font-normal text-neutral-500">{count}</span>}
           </button>
           {onAddChild ? (
             <button
@@ -488,11 +488,11 @@ function ProjectRow({
               type="button"
               aria-label={project.favorite ? `Unfavorite ${project.name}` : `Favorite ${project.name}`}
               onClick={onFavorite}
-              className={`rounded p-1 hover:text-amber-400 ${
-                project.favorite ? "text-amber-400 opacity-100" : "text-neutral-400 opacity-0 group-hover:opacity-100"
+              className={`rounded p-1 hover:text-[var(--warn)] ${
+                project.favorite ? "text-[var(--warn)] opacity-100" : "text-neutral-400 opacity-0 group-hover:opacity-100"
               }`}
             >
-              <Star className={`size-3.5 ${project.favorite ? "fill-amber-400 text-amber-400" : ""}`} />
+              <Star className={`size-3.5 ${project.favorite ? "fill-[var(--warn)] text-[var(--warn)]" : ""}`} />
             </button>
           ) : null}
           {onToggleMove ? (

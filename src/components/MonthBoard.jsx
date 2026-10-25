@@ -48,82 +48,99 @@ export function MonthBoard({ tasks = [], today, weekStart = 0, onOpen, onToggle 
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label="Previous month"
-          onClick={() => shift(-1)}
-          className="rounded-md p-1 text-neutral-400 hover:bg-white/5"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <h2 className="text-sm font-medium text-neutral-100">
+    <div className="flex h-full min-h-0 flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-neutral-100">
           {monthLabel(anchor.year, anchor.month)}
         </h2>
-        <button
-          type="button"
-          aria-label="Next month"
-          onClick={() => shift(1)}
-          className="rounded-md p-1 text-neutral-400 hover:bg-white/5"
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-neutral-500">
-        {[...WEEKDAYS.slice(weekStart), ...WEEKDAYS.slice(0, weekStart)].map((day) => (
-          <div key={day}>{day}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((cell) => (
+        <div className="tm-rule ml-auto flex items-center rounded-md border p-0.5">
           <button
-            key={cell.iso}
             type="button"
-            onClick={() => setSelected(cell.iso)}
-            aria-pressed={selected === cell.iso}
-            className={`min-h-16 rounded-lg border px-1.5 py-1 text-left ${
-              selected === cell.iso
-                ? "border-white/20 bg-white/10"
-                : "border-transparent bg-white/5 hover:bg-white/10"
-            } ${cell.iso === today ? "ring-1 ring-[var(--accent)]/50" : ""}`}
+            aria-label="Previous month"
+            onClick={() => shift(-1)}
+            className="rounded p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200"
           >
-            <span className={`text-xs ${cell.inMonth ? "text-neutral-200" : "text-neutral-600"}`}>
-              {cell.day}
-            </span>
-            <span className="mt-1 block space-y-0.5">
-              {cell.tasks.slice(0, 3).map((task) => (
-                <span
-                  key={task.id}
-                  className={`block truncate text-[10px] ${
-                    task.completed ? "text-neutral-600 line-through" : "text-neutral-300"
-                  }`}
-                >
-                  {task.title}
-                </span>
-              ))}
-              {cell.tasks.length > 3 ? (
-                <span className="block text-[10px] text-neutral-500">+{cell.tasks.length - 3}</span>
-              ) : null}
-            </span>
+            <ChevronLeft className="size-4" />
           </button>
-        ))}
+          <span className="tm-rule h-4 border-l" aria-hidden="true" />
+          <button
+            type="button"
+            aria-label="Next month"
+            onClick={() => shift(1)}
+            className="rounded p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      </div>
+      <div className="tm-rule overflow-hidden rounded-lg border">
+        <div className="tm-rule grid grid-cols-7 border-b bg-white/[0.02]">
+          {[...WEEKDAYS.slice(weekStart), ...WEEKDAYS.slice(0, weekStart)].map((day) => (
+            <div key={day} className="tm-eyebrow px-2 py-2">{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-px bg-[var(--rule)]">
+          {cells.map((cell) => (
+            <button
+              key={cell.iso}
+              type="button"
+              onClick={() => setSelected(cell.iso)}
+              aria-pressed={selected === cell.iso}
+              className={`min-h-[4.5rem] px-2 py-1.5 text-left transition-colors ${
+                selected === cell.iso
+                  ? "bg-[var(--selected)] shadow-[inset_0_0_0_1px_var(--accent)]"
+                  : cell.inMonth
+                    ? "bg-[var(--canvas)] hover:bg-white/[0.04]"
+                    : "bg-[var(--canvas)] opacity-60 hover:bg-white/[0.04]"
+              }`}
+            >
+              <span
+                className={`tm-mono tm-chip inline-grid min-w-5 place-items-center px-1 text-[11px] leading-5 ${
+                  cell.iso === today
+                    ? "bg-[var(--accent)] font-semibold text-[var(--on-accent)]"
+                    : cell.inMonth
+                      ? "text-neutral-200"
+                      : "text-neutral-600"
+                }`}
+              >
+                {cell.day}
+              </span>
+              <span className="mt-1 block space-y-0.5">
+                {cell.tasks.slice(0, 3).map((task) => (
+                  <span
+                    key={task.id}
+                    className={`block truncate border-l-2 pl-1.5 text-[10.5px] leading-4 ${
+                      task.completed
+                        ? "border-transparent text-neutral-600 line-through"
+                        : "border-[var(--accent)] text-neutral-300"
+                    }`}
+                  >
+                    {task.title}
+                  </span>
+                ))}
+                {cell.tasks.length > 3 ? (
+                  <span className="tm-mono block text-[10px] text-neutral-500">+{cell.tasks.length - 3}</span>
+                ) : null}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <h3 className="text-sm font-medium text-neutral-200">{formatDue(selected, today)}</h3>
+        <h3 className="tm-eyebrow tm-ruled">{formatDue(selected, today)}</h3>
         {selectedTasks.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">Nothing due this day.</p>
+          <p className="mt-3 text-sm text-neutral-500">Nothing due this day.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-white/5">
+          <ul className="mt-2">
             {selectedTasks.map((task) => (
-              <li key={task.id} className="flex items-center gap-2 py-2">
+              <li key={task.id} className="tm-rule flex items-center gap-3 border-b py-2.5 pl-1">
                 <button
                   type="button"
                   aria-pressed={task.completed}
                   aria-label={task.completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
                   onClick={() => onToggle(task.id)}
-                  className={`size-4 rounded-full border ${
-                    task.completed ? "border-[var(--accent)] bg-[var(--accent)]" : "border-neutral-500"
+                  className={`tm-check size-4 border-[1.5px] ${
+                    task.completed ? "border-[var(--success)] bg-[var(--success)]" : "border-neutral-500 hover:bg-white/5"
                   }`}
                 />
                 <button

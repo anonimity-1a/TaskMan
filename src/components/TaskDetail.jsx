@@ -67,15 +67,17 @@ export function TaskDetail({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/60 p-4 pt-10" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/55 p-4 pt-10 backdrop-blur-[2px]" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-labelledby="task-title"
-        className="flex max-h-[min(720px,calc(100%-2rem))] w-[min(920px,calc(100%-1rem))] flex-col overflow-hidden rounded-xl border border-white/10 bg-[var(--panel)] text-neutral-100 shadow-2xl"
+        className="tm-surface flex max-h-[min(720px,calc(100%-2rem))] w-[min(920px,calc(100%-1rem))] flex-col overflow-hidden rounded-xl text-neutral-100"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center gap-2 border-b border-white/5 px-4 py-2 text-sm text-neutral-400">
-          <span className="truncate">{project?.name ?? "Inbox"}</span>
+        <header className="tm-rule flex items-center gap-2 border-b bg-white/[0.02] px-5 py-2.5 text-sm text-neutral-400">
+          <span className="tm-eyebrow">Task</span>
+          <span className="tm-eyebrow" aria-hidden="true">/</span>
+          <span className="tm-eyebrow truncate text-neutral-300!">{project?.name ?? "Inbox"}</span>
           <span className="ml-auto flex items-center gap-1">
             <button type="button" aria-label="Previous task" disabled={!hasPrev} onClick={onPrev} className="rounded p-1 hover:bg-white/5 disabled:opacity-30">
               <ChevronUp className="size-4" />
@@ -92,7 +94,7 @@ export function TaskDetail({
           </span>
         </header>
         {more ? (
-          <div className="flex flex-wrap gap-2 border-b border-white/5 px-4 py-2 text-sm">
+          <div className="tm-rule flex flex-wrap gap-1 border-b px-4 py-2 text-sm">
             <button type="button" onClick={onDuplicate} className="rounded px-2 py-1 hover:bg-white/5">Duplicate</button>
             {task.recurrence ? (
               <button type="button" onClick={onCompleteForever} className="rounded px-2 py-1 hover:bg-white/5">
@@ -104,19 +106,21 @@ export function TaskDetail({
                 Allow desktop alerts
               </button>
             ) : null}
-            <button type="button" onClick={onDelete} className="rounded px-2 py-1 text-[var(--accent)] hover:bg-white/5">
+            <button type="button" onClick={onDelete} className="ml-auto rounded px-2 py-1 text-[var(--danger)] hover:bg-[var(--danger)]/10">
               Delete
             </button>
           </div>
         ) : null}
-        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4">
+        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_304px]">
+          <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-5">
             <div className="flex items-start gap-3">
               <button
                 type="button"
                 aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
                 onClick={() => onToggle(task.id)}
-                className={`mt-1 size-5 shrink-0 rounded-full border-2 ${tone.circle}`}
+                className={`tm-check mt-1.5 size-5 shrink-0 border-[1.5px] ${tone.circle} ${
+                  task.completed ? "border-transparent! bg-[var(--success)]" : "hover:bg-white/5"
+                }`}
               />
               <input
                 id="task-title"
@@ -127,7 +131,7 @@ export function TaskDetail({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.currentTarget.blur();
                 }}
-                className="w-full bg-transparent text-lg font-medium outline-none"
+                className="w-full bg-transparent font-display text-2xl font-semibold tracking-tight outline-none"
               />
             </div>
             <textarea
@@ -137,19 +141,27 @@ export function TaskDetail({
               onBlur={() => onPatch({ description })}
               rows={3}
               placeholder="Description"
-              className="w-full resize-y bg-transparent text-sm text-neutral-300 outline-none placeholder:text-neutral-600"
+              className="tm-rule w-full resize-y rounded-md border border-transparent bg-transparent px-3 py-2 text-sm leading-relaxed text-neutral-300 outline-none placeholder:text-neutral-600 hover:border-[var(--rule)] focus:border-[var(--accent)]"
             />
             <div>
-              <ul className="space-y-1">
+              <h3 className="tm-eyebrow tm-ruled mb-2">
+                <span>Sub-tasks</span>
+                {children.length > 0 ? (
+                  <span className="tm-mono">
+                    {children.filter((child) => child.completed).length}/{children.length}
+                  </span>
+                ) : null}
+              </h3>
+              <ul>
                 {children.map((child) => {
                   const childTone = PRIORITY_META[child.priority] ?? PRIORITY_META[4];
                   return (
-                    <li key={child.id} className="flex items-center gap-2">
+                    <li key={child.id} className="tm-rule flex items-center gap-3 border-b py-2">
                       <button
                         type="button"
                         aria-label={child.completed ? `Mark ${child.title} incomplete` : `Mark ${child.title} complete`}
                         onClick={() => onToggle(child.id)}
-                        className={`size-4 rounded-full border-2 ${childTone.circle} ${child.completed ? "bg-white/20" : ""}`}
+                        className={`tm-check size-4 shrink-0 border-[1.5px] ${childTone.circle} ${child.completed ? "border-transparent! bg-[var(--success)]" : ""}`}
                       />
                       <button
                         type="button"
@@ -185,7 +197,7 @@ export function TaskDetail({
                 <button
                   type="button"
                   onClick={() => setAdding(true)}
-                  className="mt-2 inline-flex items-center gap-2 text-sm text-neutral-400 hover:text-neutral-200"
+                  className="mt-2 inline-flex items-center gap-2 text-sm text-neutral-400 hover:text-[var(--accent-text)]"
                 >
                   <Plus className="size-4" />
                   Add sub-task
@@ -195,11 +207,11 @@ export function TaskDetail({
             {comments.length > 0 ? (
               <ul className="space-y-2">
                 {comments.map((comment) => (
-                  <li key={comment.id} className="rounded-lg bg-white/5 px-3 py-2">
+                  <li key={comment.id} className="tm-rule rounded-md border-l-2 border-l-[var(--accent)]! bg-white/[0.03] px-3 py-2">
                     <p className="text-sm text-neutral-200">{comment.body}</p>
                     <div className="mt-1 flex items-center justify-between">
-                      <time className="text-[11px] text-neutral-500">{new Date(comment.createdAt).toLocaleString()}</time>
-                      <button type="button" onClick={() => onDeleteComment(comment.id)} className="text-[11px] text-neutral-500 hover:text-[var(--accent)]">
+                      <time className="tm-mono text-[10.5px] text-neutral-500">{new Date(comment.createdAt).toLocaleString()}</time>
+                      <button type="button" onClick={() => onDeleteComment(comment.id)} className="text-[11px] text-neutral-500 hover:text-[var(--danger)]">
                         Delete
                       </button>
                     </div>
@@ -208,7 +220,7 @@ export function TaskDetail({
               </ul>
             ) : null}
             <form
-              className="flex items-center gap-2 rounded-full border border-white/10 px-2 py-1"
+              className="tm-rule flex items-center gap-3 rounded-lg border bg-[var(--field)] px-2 py-1.5 focus-within:border-[var(--accent)]"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (!note.trim()) return;
@@ -216,7 +228,7 @@ export function TaskDetail({
                 setNote("");
               }}
             >
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-500 text-xs font-medium text-white">
+              <span className="tm-check grid size-7 shrink-0 place-items-center bg-[var(--accent)] text-xs font-bold text-[var(--on-accent)]">
                 {initial}
               </span>
               <input
@@ -228,7 +240,8 @@ export function TaskDetail({
               />
             </form>
           </div>
-          <aside className="min-h-0 overflow-y-auto border-t border-white/5 bg-[var(--panel-2)] px-4 py-2 md:border-t-0 md:border-l">
+          <aside className="tm-rule min-h-0 overflow-y-auto border-t bg-[var(--panel-2)] px-5 py-3 md:border-t-0 md:border-l">
+            <p className="tm-eyebrow pt-1 pb-2">Properties</p>
             <Meta label="Project">
               <select
                 aria-label="Project"
@@ -264,7 +277,7 @@ export function TaskDetail({
                 </select>
               </Meta>
             ) : null}
-            <Meta label="Date" valueClass={task.dueTime ? "text-violet-300" : "text-neutral-200"}>
+            <Meta label="Date" valueClass={task.dueTime ? "text-[var(--info)]" : "text-neutral-200"}>
               <span className="sr-only">{task.due ? formatWhen(task.due, task.dueTime, new Date().toISOString().slice(0, 10)) : "No date"}</span>
               <input
                 type="date"
@@ -323,9 +336,9 @@ export function TaskDetail({
                 </select>
               </span>
             </Meta>
-            <div className="border-b border-white/5 py-3">
+            <div className="tm-rule border-b py-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-400">Labels</span>
+                <span className="text-[13px] text-neutral-400">Labels</span>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {doc.labels.length === 0 ? <span className="text-xs text-neutral-500">None yet</span> : null}
@@ -344,7 +357,7 @@ export function TaskDetail({
                             : [...task.labelIds, label.id],
                         })
                       }
-                      className={`rounded-full px-2 py-0.5 text-xs ${selected ? styles.chip : "bg-white/5 text-neutral-500"}`}
+                      className={`tm-chip px-2 py-0.5 text-xs font-medium ${selected ? styles.chip : "bg-white/5 text-neutral-500 hover:text-neutral-300"}`}
                     >
                       {selected ? label.name : `+ ${label.name}`}
                     </button>
@@ -397,8 +410,8 @@ export function TaskDetail({
 
 function Meta({ label, children }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/5 py-3 text-sm">
-      <span className="shrink-0 text-neutral-400">{label}</span>
+    <div className="tm-rule flex items-center justify-between gap-3 border-b py-2.5 text-sm">
+      <span className="shrink-0 text-[13px] text-neutral-400">{label}</span>
       <span className="flex min-w-0 items-center justify-end gap-2 text-neutral-100">{children}</span>
     </div>
   );

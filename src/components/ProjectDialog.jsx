@@ -27,11 +27,11 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <form
         role="dialog"
         aria-labelledby="add-project-title"
-        className="flex max-h-[min(640px,calc(100%-2rem))] w-[min(28rem,calc(100%-1rem))] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#1f1f1f] text-neutral-100 shadow-2xl"
+        className="tm-surface flex max-h-[min(680px,calc(100%-2rem))] w-[min(30rem,calc(100%-1rem))] flex-col overflow-hidden rounded-xl text-neutral-100"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
@@ -46,15 +46,18 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
           });
         }}
       >
-        <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-          <h2 id="add-project-title" className="text-base font-semibold">
-            Add project
-          </h2>
-          <button type="button" aria-label="Close add project" onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-white/5">
+        <header className="tm-rule flex items-center justify-between border-b px-6 pt-5 pb-4">
+          <div>
+            <p className="tm-eyebrow">New</p>
+            <h2 id="add-project-title" className="mt-1 font-display text-xl font-bold tracking-tight text-[var(--title-ink)]">
+              Add project
+            </h2>
+          </div>
+          <button type="button" aria-label="Close add project" onClick={onClose} className="tm-rule rounded-md border p-1.5 text-neutral-400 hover:bg-white/5">
             <X className="size-4" />
           </button>
         </header>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <label className="block">
             <span className="text-sm font-medium">Name</span>
             <input
@@ -63,7 +66,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
               maxLength={120}
               onChange={(event) => setName(event.target.value)}
               aria-label="Project name"
-              className="mt-2 w-full rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              className="mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
             />
             <span className="mt-1 block text-right text-xs text-neutral-500">{name.length}/120</span>
           </label>
@@ -75,7 +78,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
               placeholder="Add a description"
               aria-label="Project description"
               rows={3}
-              className="mt-2 w-full resize-none rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-[var(--accent)]"
+              className="mt-2 w-full resize-none rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-[var(--accent)]"
             />
           </label>
           <div className="relative">
@@ -84,14 +87,14 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
               type="button"
               aria-expanded={colorsOpen}
               onClick={() => setColorsOpen((open) => !open)}
-              className="mt-2 flex w-full items-center gap-2 rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-left text-sm"
+              className="mt-2 flex w-full items-center gap-2 rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-left text-sm"
             >
-              <span className="size-3 rounded-full" style={{ background: projectColorHex(color) }} />
+              <span className="tm-check size-3" style={{ background: projectColorHex(color) }} />
               <span className="flex-1">{projectColorName(color)}</span>
               <ChevronDown className="size-4 text-neutral-500" />
             </button>
             {colorsOpen ? (
-              <div className="absolute top-full right-0 left-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-lg border border-white/10 bg-[#2a2a2a] py-1 shadow-xl">
+              <div className="absolute top-full right-0 left-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-lg border border-white/10 bg-[var(--field)] py-1 shadow-xl">
                 {PROJECT_COLORS.map((item) => (
                   <button
                     key={item.id}
@@ -103,7 +106,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-white/10"
                   >
                     {color === item.id ? <Check className="size-3.5" /> : <span className="size-3.5" />}
-                    <span className="size-2.5 rounded-full" style={{ background: item.hex }} />
+                    <span className="tm-check size-2.5" style={{ background: item.hex }} />
                     {item.name}
                   </button>
                 ))}
@@ -116,7 +119,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
               value={workspace}
               aria-label="Workspace"
               onChange={(event) => setWorkspace(event.target.value)}
-              className="mt-2 w-full rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-sm text-neutral-100"
+              className="mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm text-neutral-100"
             >
               <option value="">My Projects</option>
               {teams.map((team) => (
@@ -132,7 +135,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
               value={parent}
               aria-label="Parent project"
               onChange={(event) => setParent(event.target.value)}
-              className="mt-2 w-full rounded-md border border-white/10 bg-[#2a2a2a] px-3 py-2 text-sm outline-none"
+              className="mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm outline-none"
             >
               <option value="">No parent</option>
               {parents.map((project) => (
@@ -154,7 +157,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
           </div>
           <div>
             <span className="text-sm font-medium">Layout</span>
-            <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-white/5 p-1">
+            <div className="tm-rule mt-2 grid grid-cols-3 gap-1 rounded-lg border bg-[var(--chip)] p-1">
               {LAYOUTS.map((item) => {
                 const Icon = item.icon;
                 const selected = view === item.id;
@@ -165,7 +168,7 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
                     aria-pressed={selected}
                     onClick={() => setView(item.id)}
                     className={`flex items-center justify-center gap-2 rounded-md px-2 py-2 text-sm ${
-                      selected ? "bg-[#3a3a3a] text-white" : "text-neutral-400"
+                      selected ? "bg-[var(--accent)] font-medium text-[var(--on-accent)]" : "text-neutral-400 hover:bg-white/5"
                     }`}
                   >
                     <Icon className="size-4" />
@@ -176,14 +179,14 @@ export function ProjectDialog({ doc, parentId = null, teamId = null, teams = [],
             </div>
           </div>
         </div>
-        <footer className="flex justify-end gap-2 border-t border-white/10 px-4 py-3">
-          <button type="button" onClick={onClose} className="rounded-md bg-white/10 px-3 py-1.5 text-sm">
+        <footer className="tm-rule flex justify-end gap-2 border-t bg-white/[0.02] px-6 py-3">
+          <button type="button" onClick={onClose} className="tm-btn px-3.5 py-1.5 text-sm text-neutral-300 hover:bg-white/5">
             Cancel
           </button>
           <button
             type="submit"
             disabled={!name.trim()}
-            className="rounded-md bg-[var(--accent)] px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            className="tm-btn bg-[var(--accent)] px-4 py-1.5 text-sm font-semibold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40"
           >
             Add
           </button>

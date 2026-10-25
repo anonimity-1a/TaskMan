@@ -47,7 +47,7 @@ const labelOf = (options, value) => options.find(([id]) => id === value)?.[1] ??
 
 function ChoiceMenu({ options, value, onPick }) {
   return (
-    <div className="absolute top-full right-0 z-20 mt-1 max-h-72 w-44 overflow-y-auto rounded-lg border border-white/10 bg-[var(--menu)] py-1 shadow-xl">
+    <div className="tm-surface absolute top-full right-0 z-20 mt-1 max-h-72 w-44 overflow-y-auto rounded-lg bg-[var(--menu)]! py-1">
       {options.map(([id, label]) => (
         <button
           key={id}
@@ -57,7 +57,7 @@ function ChoiceMenu({ options, value, onPick }) {
             value === id ? "bg-white/10 text-white" : "text-neutral-200"
           }`}
         >
-          <Check className={`size-3.5 ${value === id ? "opacity-100" : "opacity-0"}`} />
+          <Check className={`size-3.5 text-[var(--accent-text)] ${value === id ? "opacity-100" : "opacity-0"}`} />
           {label}
         </button>
       ))}
@@ -69,7 +69,7 @@ function Field({ label, dirty, value, open, onToggle, children }) {
   return (
     <div className="relative flex items-center justify-between gap-3 py-1.5">
       <span className="flex items-center gap-2 text-sm text-neutral-200">
-        <span className={`size-1.5 rounded-full ${dirty ? "bg-orange-400" : "bg-transparent"}`} />
+        <span className={`size-1.5 rounded-full ${dirty ? "bg-[var(--warn)]" : "bg-transparent"}`} />
         {label}
       </span>
       <button
@@ -135,21 +135,24 @@ export function DisplayMenu({ display, onChange }) {
           setOpen((value) => !value);
           setMenu(null);
         }}
-        className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-neutral-100 hover:bg-white/10"
+        className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-neutral-200 hover:bg-white/5"
       >
-        <List className="size-4" aria-hidden="true" />
-        Display{delta.total > 0 ? `: ${delta.total}` : ""}
+        <List className="size-4 text-neutral-400" aria-hidden="true" />
+        Display
+        {delta.total > 0 ? (
+          <span className="tm-mono tm-chip bg-[var(--accent)] px-1.5 text-[10px] leading-4 font-semibold text-[var(--on-accent)]">
+            {delta.total}
+          </span>
+        ) : null}
       </button>
       {open ? (
         <div
           role="dialog"
           aria-label="Display"
-          className="absolute top-full right-0 z-30 mt-2 w-[22rem] rounded-xl border border-white/10 bg-[var(--panel)] p-3 text-neutral-100 shadow-2xl"
+          className="tm-surface absolute top-full right-0 z-30 mt-2 w-[22rem] rounded-xl p-4 text-neutral-100"
         >
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-medium">Layout</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
+          <p className="tm-eyebrow mb-2">Layout</p>
+          <div className="tm-rule grid grid-cols-3 gap-1 rounded-lg border bg-[var(--chip)] p-1">
             {[
               ["list", "List", List],
               ["board", "Board", Columns3],
@@ -160,13 +163,13 @@ export function DisplayMenu({ display, onChange }) {
                 type="button"
                 aria-pressed={display.layout === id}
                 onClick={() => set({ layout: id })}
-                className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-3 text-xs ${
+                className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium ${
                   display.layout === id
-                    ? "border-white/20 bg-[var(--menu)] text-white"
-                    : "border-transparent bg-[var(--chip)] text-neutral-400 hover:text-neutral-200"
+                    ? "bg-[var(--accent)] text-[var(--on-accent)]"
+                    : "text-neutral-400 hover:bg-white/5 hover:text-neutral-200"
                 }`}
               >
-                <Icon className="size-4" aria-hidden="true" />
+                <Icon className="size-3.5" aria-hidden="true" />
                 {label}
               </button>
             ))}
@@ -178,24 +181,24 @@ export function DisplayMenu({ display, onChange }) {
               role="switch"
               aria-checked={display.showCompleted}
               onClick={() => set({ showCompleted: !display.showCompleted })}
-              className={`relative h-6 w-11 rounded-full ${display.showCompleted ? "bg-neutral-200" : "bg-[var(--chip)]"}`}
+              className={`relative h-6 w-11 rounded-full ${display.showCompleted ? "bg-[var(--accent)]" : "bg-white/15"}`}
             >
               <span
-                className={`absolute top-0.5 size-5 rounded-full bg-white shadow ${
-                  display.showCompleted ? "right-0.5" : "left-0.5 bg-neutral-400"
+                className={`absolute top-0.5 size-5 rounded-full bg-[var(--knob)] shadow ${
+                  display.showCompleted ? "right-0.5" : "left-0.5"
                 }`}
               />
             </button>
           </div>
-          <section className="mt-3 border-t border-white/10 pt-2">
+          <section className="tm-rule mt-4 border-t pt-3">
             <button
               type="button"
               onClick={() => setSortOpen((value) => !value)}
-              className="flex w-full items-center gap-2 py-1 text-sm font-medium"
+              className="tm-eyebrow flex w-full items-center gap-2 py-1"
             >
               Sort
               {delta.sort > 0 ? (
-                <span className="grid size-4 place-items-center rounded-full bg-neutral-600 text-[10px]">
+                <span className="tm-chip bg-[var(--accent)] px-1.5 text-[10px] leading-4 text-[var(--on-accent)]">
                   {delta.sort}
                 </span>
               ) : null}
@@ -254,15 +257,15 @@ export function DisplayMenu({ display, onChange }) {
               </div>
             ) : null}
           </section>
-          <section className="mt-2 border-t border-white/10 pt-2">
+          <section className="tm-rule mt-3 border-t pt-3">
             <button
               type="button"
               onClick={() => setFilterOpen((value) => !value)}
-              className="flex w-full items-center gap-2 py-1 text-sm font-medium"
+              className="tm-eyebrow flex w-full items-center gap-2 py-1"
             >
               Filter
               {delta.filter > 0 ? (
-                <span className="grid size-4 place-items-center rounded-full bg-neutral-600 text-[10px]">
+                <span className="tm-chip bg-[var(--accent)] px-1.5 text-[10px] leading-4 text-[var(--on-accent)]">
                   {delta.filter}
                 </span>
               ) : null}
@@ -306,7 +309,7 @@ export function DisplayMenu({ display, onChange }) {
                   <span className="flex items-center gap-2 text-sm text-neutral-200">
                     <span
                       className={`size-1.5 rounded-full ${
-                        display.priorities.length ? "bg-orange-400" : "bg-transparent"
+                        display.priorities.length ? "bg-[var(--warn)]" : "bg-transparent"
                       }`}
                     />
                     Priority
@@ -358,7 +361,7 @@ export function DisplayMenu({ display, onChange }) {
               onChange({ ...FACTORY_DISPLAY, priorities: [] });
               setMenu(null);
             }}
-            className="mt-3 w-full py-2 text-center text-sm text-[var(--accent)] hover:text-[var(--accent)]"
+            className="tm-btn tm-rule mt-4 w-full border py-2 text-center text-sm font-medium text-[var(--accent-text)] hover:bg-white/5"
           >
             Reset all
           </button>

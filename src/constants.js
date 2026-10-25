@@ -53,20 +53,20 @@ export const projectColorName = (value) =>
   PROJECT_COLORS.find((color) => color.id === value)?.name ?? "Charcoal";
 
 export const COLOR_STYLES = {
-  stone: { dot: "bg-stone-400", text: "text-stone-300", chip: "bg-white/10 text-stone-200" },
-  indigo: { dot: "bg-indigo-400", text: "text-indigo-300", chip: "bg-indigo-400/15 text-indigo-200" },
-  emerald: { dot: "bg-emerald-400", text: "text-emerald-300", chip: "bg-emerald-400/15 text-emerald-200" },
-  amber: { dot: "bg-amber-400", text: "text-amber-300", chip: "bg-amber-400/15 text-amber-100" },
-  rose: { dot: "bg-rose-400", text: "text-rose-300", chip: "bg-rose-400/15 text-rose-100" },
-  sky: { dot: "bg-sky-400", text: "text-sky-300", chip: "bg-sky-400/15 text-sky-100" },
-  violet: { dot: "bg-violet-400", text: "text-violet-300", chip: "bg-violet-400/15 text-violet-100" },
+  stone: { dot: "bg-stone-400", text: "text-stone-600 dark:text-stone-300", chip: "tm-chip bg-white/10 text-stone-700 dark:text-stone-200" },
+  indigo: { dot: "bg-indigo-400", text: "text-indigo-700 dark:text-indigo-300", chip: "tm-chip bg-indigo-400/15 text-indigo-800 dark:text-indigo-200" },
+  emerald: { dot: "bg-emerald-400", text: "text-emerald-700 dark:text-emerald-300", chip: "tm-chip bg-emerald-400/15 text-emerald-800 dark:text-emerald-200" },
+  amber: { dot: "bg-amber-400", text: "text-amber-700 dark:text-amber-300", chip: "tm-chip bg-amber-400/15 text-amber-800 dark:text-amber-100" },
+  rose: { dot: "bg-rose-400", text: "text-rose-700 dark:text-rose-300", chip: "tm-chip bg-rose-400/15 text-rose-800 dark:text-rose-100" },
+  sky: { dot: "bg-sky-400", text: "text-sky-700 dark:text-sky-300", chip: "tm-chip bg-sky-400/15 text-sky-800 dark:text-sky-100" },
+  violet: { dot: "bg-violet-400", text: "text-violet-700 dark:text-violet-300", chip: "tm-chip bg-violet-400/15 text-violet-800 dark:text-violet-100" },
 };
 
 export const PRIORITY_META = {
-  1: { circle: "border-[#de4c4a]", text: "text-[#de4c4a]", flag: "text-[#de4c4a]" },
-  2: { circle: "border-[#eb8909]", text: "text-[#eb8909]", flag: "text-[#eb8909]" },
-  3: { circle: "border-[#246fe0]", text: "text-[#246fe0]", flag: "text-[#246fe0]" },
-  4: { circle: "border-[#8d8d8d]", text: "text-[#c8c8c8]", flag: "text-[#d4d4d4]" },
+  1: { circle: "border-[var(--p1)]", text: "text-[var(--p1)]", flag: "text-[var(--p1)]" },
+  2: { circle: "border-[var(--p2)]", text: "text-[var(--p2)]", flag: "text-[var(--p2)]" },
+  3: { circle: "border-[var(--p3)]", text: "text-[var(--p3)]", flag: "text-[var(--p3)]" },
+  4: { circle: "border-[var(--p4)]", text: "text-neutral-100", flag: "text-neutral-300" },
 };
 
 export const PRIORITY_STYLES = {

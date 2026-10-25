@@ -5,6 +5,7 @@ import {
   Blocks,
   Calendar,
   CalendarDays,
+  Check,
   CircleUser,
   CreditCard,
   Database,
@@ -26,7 +27,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { QUICK_ACTIONS, SETTINGS_SECTIONS, WEEKDAY_OPTIONS } from "../settings.js";
+import { PALETTES, QUICK_ACTIONS, SETTINGS_SECTIONS, WEEKDAY_OPTIONS } from "../settings.js";
 import { TeamGeneral, TeamPeople, TeamWizard } from "./TeamSettings.jsx";
 
 const ACTION_ICONS = {
@@ -56,12 +57,6 @@ const NAV_ICONS = {
   calendars: Calendar,
 };
 
-const PALETTES = [
-  { id: "todoist", name: "Todoist", color: "#de4c4a" },
-  { id: "moonstone", name: "Moonstone", color: "#4c8adf" },
-  { id: "tangerine", name: "Tangerine", color: "#eb8909" },
-];
-
 const fieldClass =
   "mt-2 w-full rounded-md border border-white/10 bg-[var(--field)] px-3 py-2 text-sm text-neutral-100 outline-none focus:border-[var(--accent)]";
 
@@ -74,9 +69,9 @@ function Toggle({ on, label, onClick, disabled = false }) {
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`relative h-6 w-11 shrink-0 rounded-full ${on ? "bg-[var(--accent)]" : "bg-[#3a3a3a]"} disabled:opacity-50`}
+      className={`relative h-6 w-11 shrink-0 rounded-full ${on ? "bg-[var(--accent)]" : "bg-white/15"} disabled:opacity-50`}
     >
-      <span className={`absolute top-0.5 size-5 rounded-full bg-white ${on ? "right-0.5" : "left-0.5"}`} />
+      <span className={`absolute top-0.5 size-5 rounded-full bg-[var(--knob)] ${on ? "right-0.5" : "left-0.5"}`} />
     </button>
   );
 }
@@ -172,7 +167,7 @@ function AccountSection({ user, settings, onChange, onUpdateAccount, onDeleteAcc
 
   return (
     <div className="space-y-6">
-      {error ? <p className="text-sm text-[var(--accent)]">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
       {message ? <p className="text-sm text-neutral-400">{message}</p> : null}
       <section>
         <h3 className="text-sm font-medium text-neutral-100">Photo</h3>
@@ -180,7 +175,7 @@ function AccountSection({ user, settings, onChange, onUpdateAccount, onDeleteAcc
           {settings.avatar ? (
             <img src={settings.avatar} alt="" className="size-16 rounded-full object-cover" />
           ) : (
-            <span className="grid size-16 place-items-center rounded-full bg-[var(--accent)] text-xl font-semibold text-white">
+            <span className="grid size-16 place-items-center rounded-full bg-[var(--accent)] text-xl font-semibold text-[var(--on-accent)]">
               {initial}
             </span>
           )}
@@ -194,7 +189,7 @@ function AccountSection({ user, settings, onChange, onUpdateAccount, onDeleteAcc
           <button
             type="button"
             onClick={() => onChange({ ...settings, avatar: "" })}
-            className="rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent)]"
+            className="rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent-text)]"
           >
             Remove photo
           </button>
@@ -386,7 +381,7 @@ function AccountSection({ user, settings, onChange, onUpdateAccount, onDeleteAcc
             aria-label="Password to delete account"
             className={`${fieldClass} mt-0 max-w-xs`}
           />
-          <button type="submit" className="rounded-md border border-[var(--accent)] px-3 py-2 text-sm text-[var(--accent)]">
+          <button type="submit" className="rounded-md border border-[var(--danger)] px-3 py-2 text-sm text-[var(--danger)]">
             Delete account
           </button>
         </form>
@@ -523,7 +518,7 @@ function GeneralSection({ settings, onChange, onReload, onHelp }) {
       </div>
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-neutral-300">
         Do you have more feedback?{" "}
-        <button type="button" onClick={onHelp} className="text-[var(--accent)]">
+        <button type="button" onClick={onHelp} className="text-[var(--accent-text)]">
           Let's talk
         </button>
       </div>
@@ -535,7 +530,7 @@ function GeneralSection({ settings, onChange, onReload, onHelp }) {
         <button
           type="button"
           onClick={onReload}
-          className="mt-3 rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent)]"
+          className="mt-3 rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent-text)]"
         >
           Reload
         </button>
@@ -555,8 +550,8 @@ function ThemeSection({ settings, onChange }) {
         onClick={() => set({ syncTheme: !settings.syncTheme })}
         hint="The theme is saved on this computer with your other preferences."
       />
-      <h3 className="mt-6 text-sm font-medium text-neutral-100">Appearance</h3>
-      <div className="mt-2 inline-flex rounded-full bg-white/10 p-1">
+      <h3 className="tm-eyebrow mt-7">Appearance</h3>
+      <div className="tm-rule mt-2 inline-flex rounded-lg border bg-[var(--chip)] p-1">
         {[
           ["light", "Light"],
           ["dark", "Dark"],
@@ -567,36 +562,60 @@ function ThemeSection({ settings, onChange }) {
             type="button"
             aria-pressed={settings.appearance === id}
             onClick={() => set({ appearance: id })}
-            className={`rounded-full px-4 py-1 text-sm ${
-              settings.appearance === id ? "bg-[#ececec] text-[#202020]" : "text-neutral-300"
+            className={`rounded-md px-4 py-1.5 text-sm font-medium ${
+              settings.appearance === id ? "bg-[var(--accent)] text-[var(--on-accent)]" : "text-neutral-400 hover:text-neutral-200"
             }`}
           >
             {label}
           </button>
         ))}
       </div>
-      <h3 className="mt-6 text-sm font-medium text-neutral-100">Your themes</h3>
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {PALETTES.map((palette) => (
-          <button
-            key={palette.id}
-            type="button"
-            aria-pressed={settings.palette === palette.id}
-            onClick={() => set({ palette: palette.id })}
-            className={`rounded-xl border p-3 text-left ${
-              settings.palette === palette.id ? "border-[var(--accent)]" : "border-white/10"
-            }`}
-          >
-            <span className="mb-3 block h-1.5 rounded-full" style={{ background: palette.color }} />
-            <span className="text-sm font-medium" style={{ color: palette.color }}>
-              {palette.name}
-            </span>
-            <span className="mt-3 block space-y-1">
-              <span className="block h-1.5 w-10 rounded bg-white/15" />
-              <span className="block h-1.5 w-16 rounded bg-white/10" />
-            </span>
-          </button>
-        ))}
+      <h3 className="tm-eyebrow mt-7">Themes</h3>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {PALETTES.map((palette) => {
+          const { canvas, sidebar, accent, highlight, dark } = palette.preview;
+          const line = dark ? "rgb(255 255 255 / 0.18)" : "rgb(0 0 0 / 0.14)";
+          const active = settings.palette === palette.id;
+          return (
+            <button
+              key={palette.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => set({ palette: palette.id })}
+              className={`rounded-lg border p-2 text-left transition-colors ${
+                active ? "border-[var(--accent)] bg-[var(--selected)]" : "tm-rule hover:bg-white/5"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-20 overflow-hidden rounded-md shadow-[inset_0_0_0_1px_rgb(127_127_127/0.2)]"
+                style={{ background: canvas }}
+              >
+                <span className="flex w-[30%] flex-col gap-1.5 p-2" style={{ background: sidebar }}>
+                  <span className="h-2 w-full rounded-[2px]" style={{ background: accent }} />
+                  <span className="h-1 w-3/4 rounded-[2px] bg-white/30" />
+                  <span className="h-1 w-1/2 rounded-[2px] bg-white/20" />
+                </span>
+                <span className="flex flex-1 flex-col gap-1.5 p-2.5">
+                  <span className="h-2 w-1/2 rounded-[2px]" style={{ background: highlight }} />
+                  <span className="mt-0.5 flex items-center gap-1.5">
+                    <span className="size-2 rounded-[2px] border" style={{ borderColor: highlight }} />
+                    <span className="h-1 flex-1 rounded-[2px]" style={{ background: line }} />
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-[2px] border" style={{ borderColor: accent }} />
+                    <span className="h-1 w-2/3 rounded-[2px]" style={{ background: line }} />
+                  </span>
+                </span>
+              </span>
+              <span className="mt-2.5 flex items-center gap-2 px-1">
+                <span className="text-sm font-semibold text-neutral-100">{palette.name}</span>
+                {active ? <Check className="size-3.5 text-[var(--accent-text)]" /> : null}
+              </span>
+              <span className="tm-eyebrow block px-1 pb-1">{palette.mood}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -701,9 +720,9 @@ function ActionList({ title, ids, settings, onChange, extra }) {
               ) : (
                 <button type="button" aria-label={extra ? `Show ${action?.label}` : `Hide ${action?.label}`} onClick={() => transfer(id)}>
                   <span
-                    className={`grid size-4 place-items-center rounded-full text-white ${extra ? "bg-emerald-600" : "bg-[var(--accent)]"}`}
+                    className={`grid size-4 place-items-center rounded-full text-[var(--on-accent)] ${extra ? "bg-[var(--success)]" : "bg-[var(--accent)]"}`}
                   >
-                    {extra ? <Plus className="size-3" /> : <span className="block h-0.5 w-2 bg-white" />}
+                    {extra ? <Plus className="size-3" /> : <span className="block h-0.5 w-2 bg-current" />}
                   </span>
                 </button>
               )}
@@ -924,18 +943,19 @@ export function SettingsDialog({
     : (SETTINGS_SECTIONS.find((item) => item.id === section)?.label ?? "Settings");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-labelledby="settings-title"
-        className="grid h-[min(720px,calc(100%-1rem))] w-[min(920px,calc(100%-1rem))] grid-cols-1 overflow-hidden rounded-xl border border-white/10 bg-[var(--panel)] text-neutral-100 shadow-2xl md:grid-cols-[220px_1fr]"
+        className="tm-surface grid h-[min(720px,calc(100%-1rem))] w-[min(960px,calc(100%-1rem))] grid-cols-1 overflow-hidden rounded-xl text-neutral-100 md:grid-cols-[232px_1fr]"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <aside className="flex min-h-0 flex-col border-b border-white/10 bg-[var(--sidebar)] md:border-r md:border-b-0">
-          <div className="flex items-center justify-between px-4 py-3 md:block">
-            <h2 className="text-sm font-semibold">Settings</h2>
+        <aside className="tm-sidebar tm-rule flex min-h-0 flex-col border-b bg-[var(--sidebar)] text-neutral-200 md:border-r md:border-b-0">
+          <div className="flex items-center justify-between px-4 pt-5 pb-3 md:block">
+            <p className="tm-eyebrow">Preferences</p>
+            <h2 className="mt-1 font-display text-lg font-bold tracking-tight text-white">Settings</h2>
           </div>
-          <label className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-white/10 px-2 py-1.5">
+          <label className="tm-rule mx-3 mb-3 flex items-center gap-2 rounded-md border bg-white/[0.03] px-2.5 py-1.5 focus-within:border-[var(--accent)]">
             <Search className="size-4 text-neutral-500" />
             <input
               value={query}
@@ -953,23 +973,24 @@ export function SettingsDialog({
                 <button
                   key={item.id}
                   type="button"
+                  data-active={active}
                   onClick={() => setSection(item.id)}
-                  className={`mb-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
-                    active ? "bg-[var(--selected)] text-white" : "text-neutral-300 hover:bg-white/5"
+                  className={`tm-nav mb-0.5 flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-sm ${
+                    active ? "font-semibold text-white" : "text-neutral-300 hover:bg-white/5"
                   }`}
                 >
-                  <Icon className="size-4" />
+                  <Icon className={`size-4 ${active ? "text-[var(--accent-text)]" : "text-neutral-500"}`} />
                   {item.label}
                 </button>
               );
             })}
             {teams.map((team) => (
-              <div key={team.id} className="mt-3">
-                <p className="flex items-center gap-2 px-2 py-1 text-xs text-neutral-400">
+              <div key={team.id} className="mt-4">
+                <p className="tm-eyebrow flex items-center gap-2 px-2 py-1">
                   {team.logo ? (
-                    <img src={team.logo} alt="" className="size-4 rounded object-cover" />
+                    <img src={team.logo} alt="" className="tm-check size-4 object-cover" />
                   ) : (
-                    <span className="grid size-4 place-items-center rounded bg-[#4073ff] text-[10px] text-white">
+                    <span className="tm-check grid size-4 place-items-center bg-[var(--accent)] text-[10px] font-bold text-[var(--on-accent)]">
                       {team.name.slice(0, 1).toUpperCase()}
                     </span>
                   )}
@@ -982,9 +1003,10 @@ export function SettingsDialog({
                   <button
                     key={page}
                     type="button"
+                    data-active={section === `team:${team.id}:${page}`}
                     onClick={() => setSection(`team:${team.id}:${page}`)}
-                    className={`mb-0.5 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
-                      section === `team:${team.id}:${page}` ? "bg-[var(--selected)] text-white" : "text-neutral-300 hover:bg-white/5"
+                    className={`tm-nav mb-0.5 flex w-full items-center gap-2 rounded-md px-3 py-1.5 pl-9 text-left text-sm ${
+                      section === `team:${team.id}:${page}` ? "font-semibold text-white" : "text-neutral-300 hover:bg-white/5"
                     }`}
                   >
                     {label}
@@ -996,22 +1018,22 @@ export function SettingsDialog({
           <button
             type="button"
             onClick={() => setCreatingTeam(true)}
-            className="flex items-center gap-2 border-t border-white/10 px-4 py-3 text-sm text-neutral-300 hover:bg-white/5"
+            className="tm-rule flex items-center gap-2 border-t px-4 py-3.5 text-sm text-neutral-300 hover:bg-white/5"
           >
-            <Plus className="size-4" />
+            <Plus className="size-4 text-[var(--accent-text)]" />
             Add team
           </button>
         </aside>
         <section className="flex min-h-0 min-w-0 flex-col">
-          <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-            <h2 id="settings-title" className="text-base font-semibold">
+          <header className="tm-rule flex items-center justify-between border-b px-7 pt-6 pb-4">
+            <h2 id="settings-title" className="font-display text-2xl font-bold tracking-tight text-[var(--title-ink)]">
               {title}
             </h2>
-            <button type="button" aria-label="Close settings" onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-white/5">
+            <button type="button" aria-label="Close settings" onClick={onClose} className="tm-rule rounded-md border p-1.5 text-neutral-400 hover:bg-white/5">
               <X className="size-4" />
             </button>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
             {section === "account" ? (
               <AccountSection
                 user={user}
@@ -1055,7 +1077,7 @@ export function SettingsDialog({
                 <button
                   type="button"
                   onClick={downloadBackup}
-                  className="mt-3 rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent)]"
+                  className="mt-3 rounded-md border border-[var(--accent)] px-3 py-1.5 text-sm text-[var(--accent-text)]"
                 >
                   Download backup
                 </button>

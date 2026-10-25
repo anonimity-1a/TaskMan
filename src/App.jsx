@@ -76,6 +76,18 @@ const titles = {
   reporting: "Reporting",
 };
 
+const eyebrows = {
+  inbox: "Capture",
+  upcoming: "Ahead",
+  completed: "Done",
+  search: "Search results",
+  browse: "Library",
+  reporting: "Overview",
+  project: "Project",
+  label: "Label",
+  filter: "Saved filter",
+};
+
 export function App() {
   const [doc, setDoc] = useState(null);
   const [settings, setSettings] = useState(() => {
@@ -536,7 +548,7 @@ export function App() {
       <main className="grid h-full place-items-center gap-3 px-6 text-center text-sm text-neutral-400">
         <p>{error || "Loading tasks…"}</p>
         {error ? (
-          <button type="button" onClick={logout} className="text-[var(--accent)]">
+          <button type="button" onClick={logout} className="text-[var(--accent-text)]">
             Log out
           </button>
         ) : null}
@@ -550,6 +562,11 @@ export function App() {
   const selected = selectedId ? taskById(doc, selectedId) : null;
   const heading =
     project?.name ?? label?.name ?? filter?.name ?? titles[view.kind] ?? "Tasks";
+  const eyebrow =
+    view.kind === "today"
+      ? new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
+      : eyebrows[view.kind] ?? "View";
+  const openCount = view.kind === "browse" || view.kind === "reporting" ? null : selection.open.length;
   const board = display.layout === "board" && view.kind !== "browse" && view.kind !== "reporting";
   const month = display.layout === "calendar" && view.kind !== "browse" && view.kind !== "reporting";
   const sequence = selection.visible ?? [];
@@ -626,40 +643,53 @@ export function App() {
         </div>
       ) : null}
       <main className="relative flex min-w-0 flex-1 flex-col bg-[var(--canvas)]">
-        <header className="flex items-center justify-between gap-3 px-4 pt-5 pb-4 md:px-10">
-          <div className="flex min-w-0 items-center gap-2">
+        <header className="tm-rule mx-4 flex items-end justify-between gap-4 border-b pt-8 pb-5 md:mx-10">
+          <div className="flex min-w-0 items-end gap-3">
             {sidebarOpen ? null : (
               <button
                 type="button"
                 aria-label="Open menu"
                 onClick={() => setSidebarOpen(true)}
-                className="rounded-lg p-2 text-neutral-300 hover:bg-white/5"
+                className="tm-rule mb-0.5 rounded-md border p-2 text-neutral-300 hover:bg-white/5"
               >
                 <Menu className="size-5" />
               </button>
             )}
             <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold tracking-tight text-white">
-                {heading}
-                {project?.archived ? <span className="ml-2 text-sm font-normal text-neutral-500">Archived</span> : null}
-              </h1>
-              {project?.description ? <p className="truncate text-sm text-neutral-500">{project.description}</p> : null}
+              <p className="tm-eyebrow mb-2 flex items-center gap-2">
+                <span>{eyebrow}</span>
+                {openCount != null ? (
+                  <>
+                    <span aria-hidden="true">/</span>
+                    <span className="text-[var(--mark)]">{openCount} open</span>
+                  </>
+                ) : null}
+                {project?.archived ? (
+                  <>
+                    <span aria-hidden="true">/</span>
+                    <span className="text-[var(--warn)]">Archived</span>
+                  </>
+                ) : null}
+              </p>
+              <h1 className="tm-title truncate">{heading}</h1>
+              {project?.description ? <p className="mt-1.5 truncate text-sm text-neutral-400">{project.description}</p> : null}
             </div>
           </div>
           {view.kind === "browse" || view.kind === "reporting" ? null : (
-            <div className="flex items-center gap-2">
+            <div className="tm-rule flex shrink-0 items-center gap-0.5 rounded-lg border bg-white/[0.02] p-0.5">
               <DisplayMenu display={display} onChange={updateDisplay} />
+              <span className="tm-rule h-5 border-l" aria-hidden="true" />
               <div className="relative">
                 <button
                   type="button"
                   aria-label="More view options"
                   onClick={() => setMoreOpen((value) => !value)}
-                  className="rounded-lg p-2 text-neutral-400 hover:bg-white/5"
+                  className="rounded-md p-2 text-neutral-400 hover:bg-white/5 hover:text-neutral-200"
                 >
                   <MoreHorizontal className="size-4" />
                 </button>
                 {moreOpen ? (
-                  <div className="absolute top-full right-0 z-20 mt-1 w-56 rounded-lg border border-white/10 bg-[var(--panel-2)] py-1 text-sm shadow-xl">
+                  <div className="tm-surface absolute top-full right-0 z-20 mt-2 w-56 rounded-lg py-1 text-sm">
                     {project ? (
                       <button
                         type="button"
@@ -674,7 +704,7 @@ export function App() {
                     ) : null}
                     {project ? (
                       <form
-                        className="mt-1 flex gap-1"
+                        className="mx-2 my-1 flex gap-1"
                         onSubmit={(event) => {
                           event.preventDefault();
                           commit(addSection(doc, project.id, sectionName));
@@ -687,7 +717,7 @@ export function App() {
                           onChange={(event) => setSectionName(event.target.value)}
                           placeholder="Add section"
                           aria-label="Add section"
-                          className="w-full rounded bg-white/5 px-2 py-1 outline-none"
+                          className="tm-rule w-full rounded-md border bg-[var(--field)] px-2 py-1.5 outline-none focus:border-[var(--accent)]"
                         />
                       </form>
                     ) : null}
@@ -716,7 +746,7 @@ export function App() {
                         <ChevronRight className="ml-auto size-4 text-neutral-500" />
                       </button>
                       {dataMenu ? (
-                        <div className="absolute top-0 right-[calc(100%-8px)] z-30 w-52 rounded-lg border border-white/10 bg-[var(--panel-2)] py-1 shadow-xl">
+                        <div className="tm-surface absolute top-0 right-[calc(100%-8px)] z-30 w-52 rounded-lg py-1">
                           <button
                             type="button"
                             onClick={() => importRef.current?.click()}
@@ -785,7 +815,7 @@ export function App() {
         </header>
         {filter ? (
           <form
-            className="mx-4 mb-3 md:mx-10"
+            className="mx-4 mt-4 md:mx-10"
             onSubmit={(event) => {
               event.preventDefault();
               const field = event.currentTarget.elements.namedItem("query");
@@ -798,12 +828,12 @@ export function App() {
               defaultValue={filter.query}
               aria-label="Filter query"
               onBlur={(event) => commit(updateFilter(doc, filter.id, { query: event.target.value }))}
-              className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none"
+              className="tm-mono tm-rule w-full rounded-md border bg-[var(--field)] px-3 py-2 text-[13px] outline-none focus:border-[var(--accent)]"
             />
           </form>
         ) : null}
         {legacy ? (
-          <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm md:mx-10">
+          <div className="tm-toast mx-4 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/5 px-4 py-2.5 text-sm md:mx-10">
             <p>Tasks already on this computer can be copied to your account.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setLegacy(null)} className="px-2 py-1">
@@ -815,7 +845,7 @@ export function App() {
                   commit(legacy);
                   setLegacy(null);
                 }}
-                className="rounded-lg bg-[var(--accent)] px-3 py-1 text-white"
+                className="tm-btn bg-[var(--accent)] px-3 py-1 font-medium text-[var(--on-accent)]"
               >
                 Copy tasks
               </button>
@@ -823,9 +853,9 @@ export function App() {
           </div>
         ) : null}
         {error ? (
-          <p className="mx-4 mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-200 md:mx-10">{error}</p>
+          <p className="mx-4 mt-4 rounded-md border-l-[3px] border-[var(--danger)] bg-[var(--danger)]/10 px-4 py-2.5 text-sm text-neutral-100 md:mx-10">{error}</p>
         ) : null}
-        <div className={`min-h-0 flex-1 px-4 pb-8 md:px-10 ${board || month ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <div className={`min-h-0 flex-1 px-4 pt-5 pb-8 md:px-10 ${board || month ? "overflow-hidden" : "overflow-y-auto"}`}>
           {view.kind === "browse" ? (
             <BrowseView
               doc={doc}
@@ -1026,7 +1056,7 @@ export function App() {
       {toast ? (
         <p
           role="status"
-          className="fixed bottom-4 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-full bg-[#111] px-4 py-2 text-sm text-white shadow-lg"
+          className="tm-surface tm-toast fixed right-5 bottom-5 z-50 max-w-sm rounded-md px-4 py-3 text-sm text-neutral-100"
         >
           {toast}
         </p>

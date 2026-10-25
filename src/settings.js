@@ -14,6 +14,41 @@ export const QUICK_ACTIONS = [
 
 const ACTION_IDS = QUICK_ACTIONS.map((action) => action.id);
 
+export const PALETTES = [
+  {
+    id: "forge",
+    name: "Forge",
+    mood: "Bold & contrast",
+    preview: { canvas: "#141516", sidebar: "#0e0f10", accent: "#2a7d45", highlight: "#e5304f", dark: true },
+  },
+  {
+    id: "signal",
+    name: "Signal",
+    mood: "Vibrant cyber",
+    preview: { canvas: "#121214", sidebar: "#0b0b0d", accent: "#a07cff", highlight: "#f4e04d", dark: true },
+  },
+  {
+    id: "atelier",
+    name: "Atelier",
+    mood: "Sophisticated luxury",
+    preview: { canvas: "#231a15", sidebar: "#1b1410", accent: "#d6bd8a", highlight: "#e39a26", dark: true },
+  },
+  {
+    id: "glacier",
+    name: "Glacier",
+    mood: "Cool tech",
+    preview: { canvas: "#eef1f5", sidebar: "#3a1d3c", accent: "#eaa221", highlight: "#3a1d3c", dark: false },
+  },
+  {
+    id: "linen",
+    name: "Linen",
+    mood: "Muted pastel",
+    preview: { canvas: "#eceae7", sidebar: "#4a3a30", accent: "#cfc4ef", highlight: "#4a3a30", dark: false },
+  },
+];
+
+const PALETTE_IDS = PALETTES.map((palette) => palette.id);
+
 export const WEEKDAY_OPTIONS = [
   "Sunday",
   "Monday",
@@ -66,7 +101,7 @@ export const defaultSettings = () => ({
   experimental: false,
   appearance: "dark",
   syncTheme: true,
-  palette: "todoist",
+  palette: "forge",
   sidebar: {
     inbox: true,
     today: true,
@@ -132,7 +167,7 @@ export const sanitizeSettings = (value) => {
     experimental: source.experimental === true,
     appearance: ["light", "dark", "system"].includes(source.appearance) ? source.appearance : "dark",
     syncTheme: source.syncTheme !== false,
-    palette: ["todoist", "moonstone", "tangerine"].includes(source.palette) ? source.palette : "todoist",
+    palette: PALETTE_IDS.includes(source.palette) ? source.palette : "forge",
     sidebar,
     showCounts: source.showCounts !== false,
     quickAdd: {
@@ -200,7 +235,7 @@ export const resolvedAppearance = (appearance) => {
 export const applyTheme = (settings) => {
   const appearance = resolvedAppearance(settings?.appearance);
   document.documentElement.dataset.appearance = appearance;
-  document.documentElement.dataset.palette = settings?.palette || "todoist";
+  document.documentElement.dataset.palette = settings?.palette || "forge";
   document.documentElement.style.colorScheme = appearance;
 };
 
