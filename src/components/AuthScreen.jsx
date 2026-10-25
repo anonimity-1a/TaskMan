@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { loginAccount, registerAccount } from "../api.js";
+import logoText from "../../TaskManLogoText.svg";
 
 const fieldClass =
   "tm-rule mt-1.5 w-full rounded-md border bg-[var(--field)] px-3 py-2.5 text-sm text-neutral-100 outline-none focus:border-[var(--accent)]";
@@ -18,8 +19,7 @@ export function AuthScreen({ onAuth }) {
     <main className="grid h-full bg-[var(--canvas)] text-neutral-100 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <aside className="tm-sidebar tm-rule hidden flex-col justify-between border-r bg-[var(--sidebar)] p-12 text-neutral-200 md:flex">
         <div className="flex items-center gap-3">
-          <span className="tm-check grid size-9 place-items-center bg-[var(--accent)] text-base font-bold text-[var(--on-accent)]">T</span>
-          <span className="font-display text-lg font-bold tracking-tight text-white">TaskMan</span>
+          <img src={logoText} alt="TaskMan" className="h-9 w-auto" />
         </div>
         <div>
           <p className="tm-eyebrow">Self-hosted</p>

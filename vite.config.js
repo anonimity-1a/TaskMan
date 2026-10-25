@@ -2,8 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+function tolerateBusyWatch() {
+  return {
+    name: "tolerate-busy-watch",
+    configureServer(server) {
+      server.watcher.on("error", (error) => {
+        if (error?.code === "EBUSY" || error?.code === "EPERM") return;
+        console.error(error);
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), tolerateBusyWatch()],
   base: "./",
   server: {
     host: "0.0.0.0",
@@ -17,6 +29,9 @@ export default defineConfig({
         timeout: 0,
         proxyTimeout: 0,
       },
+    },
+    watch: {
+      ignored: ["**/*.crdownload", "**/*.~tmp", "**/*.tmp"],
     },
   },
 });

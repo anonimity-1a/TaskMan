@@ -49,7 +49,7 @@ The browser uses `/api` on the same origin. Set `VITE_API_URL` at build time whe
 npm run build:extension
 ```
 
-In Chrome or Edge, open `chrome://extensions`, turn on Developer mode, and load `extension/dist`. The toolbar button opens the same TaskMan app as the website in a floating window. It signs in to `https://taskman.aamoghtech.org/api`. Set `VITE_API_URL` before building when the extension should use another API.
+In Chrome or Edge, open `chrome://extensions`, turn on Developer mode, and load `extension/dist`. The toolbar button opens the same TaskMan app as the website in a popup under the icon. It signs in to `https://taskman.aamoghtech.org/api`. Set `VITE_API_URL` before building when the extension should use another API.
 
 ## Saved tasks on this device
 
