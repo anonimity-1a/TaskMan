@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, ChevronUp, Flag, MapPin, MoreHorizontal, Plus, X } from "lucide-react";
+import { COLOR_STYLES, PRIORITY_META } from "../constants.js";
+import { applyPriorityShorthand } from "../parse.js";
 import {
-  COLOR_STYLES,
   childrenOf,
   commentsFor,
   describeRecurrence,
+  formatWhen,
+  projectById,
   recurrenceFromKey,
   recurrenceKey,
 } from "../model.js";
@@ -12,7 +15,13 @@ import {
 export function TaskDetail({
   doc,
   task,
+  accountName = "",
+  hasPrev,
+  hasNext,
+  alertsGranted,
   onClose,
+  onPrev,
+  onNext,
   onPatch,
   onToggle,
   onDelete,
@@ -23,317 +32,374 @@ export function TaskDetail({
   onAddComment,
   onDeleteComment,
   onAllowAlerts,
-  alertsGranted,
 }) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [subtask, setSubtask] = useState("");
+  const [adding, setAdding] = useState(false);
   const [note, setNote] = useState("");
+  const [more, setMore] = useState(false);
+  const [location, setLocation] = useState(task.location ?? "");
   const children = childrenOf(doc, task.id);
   const comments = commentsFor(doc, task.id);
+  const project = projectById(doc, task.projectId);
   const sections = doc.sections.filter((section) => section.projectId === task.projectId);
+  const tone = PRIORITY_META[task.priority] ?? PRIORITY_META[4];
+  const initial = (accountName || "T").slice(0, 1).toUpperCase();
   const repeatValue = recurrenceKey(task.recurrence);
+  const reminderLabel =
+    task.reminder && task.dueTime && task.reminder === task.dueTime
+      ? "At time of task"
+      : task.reminder || "None";
+
+  const saveTitle = () => {
+    const applied = applyPriorityShorthand(title);
+    if (!applied.title && applied.priority == null) {
+      setTitle(task.title);
+      return;
+    }
+    const nextTitle = applied.title || task.title;
+    setTitle(nextTitle);
+    onPatch({
+      ...(nextTitle !== task.title ? { title: nextTitle } : {}),
+      ...(applied.priority != null ? { priority: applied.priority } : {}),
+    });
+  };
 
   return (
-    <aside className="absolute inset-0 z-30 flex w-full flex-col border-l border-stone-200 bg-white shadow-xl md:inset-y-0 md:right-0 md:left-auto md:w-[24rem]">
-      <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
-        <h2 className="text-sm font-semibold text-stone-800">Task</h2>
-        <button
-          type="button"
-          aria-label="Close task"
-          onClick={onClose}
-          className="rounded-md p-1 text-stone-400 hover:bg-stone-100"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <input
-          aria-label="Task name"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          onBlur={() => onPatch({ title })}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-          }}
-          className="w-full rounded-lg border border-stone-200 px-3 py-2 text-base outline-none focus:border-indigo-400"
-        />
-        <textarea
-          aria-label="Description"
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          onBlur={() => onPatch({ description })}
-          rows={4}
-          placeholder="Description"
-          className="w-full resize-y rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-xs text-stone-500">
-            Project
-            <select
-              aria-label="Project"
-              disabled={Boolean(task.parentId)}
-              value={task.projectId}
-              onChange={(event) => onPatch({ projectId: event.target.value })}
-              className="mt-1 w-full rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm text-stone-800"
-            >
-              {doc.projects
-                .filter((project) => !project.archived || project.id === task.projectId)
-                .map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="text-xs text-stone-500">
-            Section
-            <select
-              aria-label="Section"
-              disabled={Boolean(task.parentId)}
-              value={task.sectionId ?? ""}
-              onChange={(event) => onPatch({ sectionId: event.target.value || null })}
-              className="mt-1 w-full rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm text-stone-800"
-            >
-              <option value="">No section</option>
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-stone-500">
-            Due date
-            <input
-              type="date"
-              value={task.due ?? ""}
-              onChange={(event) => onPatch({ due: event.target.value || null })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="text-xs text-stone-500">
-            Due time
-            <input
-              type="time"
-              value={task.dueTime ?? ""}
-              onChange={(event) => onPatch({ dueTime: event.target.value || null })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="text-xs text-stone-500">
-            Deadline
-            <input
-              type="date"
-              value={task.deadline ?? ""}
-              onChange={(event) => onPatch({ deadline: event.target.value || null })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="text-xs text-stone-500">
-            Reminder
-            <input
-              type="time"
-              value={task.reminder ?? ""}
-              onChange={(event) => onPatch({ reminder: event.target.value || null })}
-              className="mt-1 w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm"
-            />
-          </label>
-        </div>
-        <label className="block text-xs text-stone-500">
-          Repeat
-          <select
-            aria-label="Repeat"
-            value={repeatValue}
-            onChange={(event) =>
-              onPatch({ recurrence: recurrenceFromKey(event.target.value) })
-            }
-            className="mt-1 w-full rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm text-stone-800"
-          >
-            <option value="none">No repeat</option>
-            <option value="day">Every day</option>
-            <option value="weekday">Every weekday</option>
-            <option value="week">Every week</option>
-            <option value="month">Every month</option>
-            <option value="year">Every year</option>
-            {repeatValue === "custom" ? (
-              <option value="custom">{describeRecurrence(task.recurrence)}</option>
+    <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/60 p-4 pt-10" onMouseDown={onClose}>
+      <div
+        role="dialog"
+        aria-labelledby="task-title"
+        className="flex max-h-[min(720px,calc(100%-2rem))] w-[min(920px,calc(100%-1rem))] flex-col overflow-hidden rounded-xl border border-white/10 bg-[var(--panel)] text-neutral-100 shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="flex items-center gap-2 border-b border-white/5 px-4 py-2 text-sm text-neutral-400">
+          <span className="truncate">{project?.name ?? "Inbox"}</span>
+          <span className="ml-auto flex items-center gap-1">
+            <button type="button" aria-label="Previous task" disabled={!hasPrev} onClick={onPrev} className="rounded p-1 hover:bg-white/5 disabled:opacity-30">
+              <ChevronUp className="size-4" />
+            </button>
+            <button type="button" aria-label="Next task" disabled={!hasNext} onClick={onNext} className="rounded p-1 hover:bg-white/5 disabled:opacity-30">
+              <ChevronDown className="size-4" />
+            </button>
+            <button type="button" aria-label="More task actions" onClick={() => setMore((value) => !value)} className="rounded p-1 hover:bg-white/5">
+              <MoreHorizontal className="size-4" />
+            </button>
+            <button type="button" aria-label="Close task" onClick={onClose} className="rounded p-1 hover:bg-white/5">
+              <X className="size-4" />
+            </button>
+          </span>
+        </header>
+        {more ? (
+          <div className="flex flex-wrap gap-2 border-b border-white/5 px-4 py-2 text-sm">
+            <button type="button" onClick={onDuplicate} className="rounded px-2 py-1 hover:bg-white/5">Duplicate</button>
+            {task.recurrence ? (
+              <button type="button" onClick={onCompleteForever} className="rounded px-2 py-1 hover:bg-white/5">
+                Complete and stop repeating
+              </button>
             ) : null}
-          </select>
-        </label>
-        <div className="flex flex-wrap gap-1" role="group" aria-label="Priority">
-          {[1, 2, 3, 4].map((level) => (
-            <button
-              key={level}
-              type="button"
-              aria-pressed={task.priority === level}
-              onClick={() => onPatch({ priority: level })}
-              className={`rounded-md px-2 py-1 text-xs ${
-                task.priority === level
-                  ? "bg-indigo-600 text-white"
-                  : "bg-stone-100 text-stone-600"
-              }`}
-            >
-              P{level}
+            {task.reminder && !alertsGranted ? (
+              <button type="button" onClick={onAllowAlerts} className="rounded px-2 py-1 hover:bg-white/5">
+                Allow desktop alerts
+              </button>
+            ) : null}
+            <button type="button" onClick={onDelete} className="rounded px-2 py-1 text-[var(--accent)] hover:bg-white/5">
+              Delete
             </button>
-          ))}
-        </div>
-        {task.reminder && !alertsGranted ? (
-          <button
-            type="button"
-            onClick={onAllowAlerts}
-            className="text-xs text-indigo-700 hover:underline"
-          >
-            Allow desktop alerts for reminders
-          </button>
-        ) : null}
-        <div>
-          <p className="text-xs font-medium text-stone-500">Labels</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {doc.labels.length === 0 ? (
-              <p className="text-xs text-stone-400">Add a label in the sidebar first.</p>
-            ) : (
-              doc.labels.map((label) => {
-                const selected = task.labelIds.includes(label.id);
-                const styles = COLOR_STYLES[label.color] ?? COLOR_STYLES.indigo;
-                return (
-                  <button
-                    key={label.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() =>
-                      onPatch({
-                        labelIds: selected
-                          ? task.labelIds.filter((id) => id !== label.id)
-                          : [...task.labelIds, label.id],
-                      })
-                    }
-                    className={`rounded-full px-2.5 py-1 text-xs ${
-                      selected ? styles.chip : "bg-stone-100 text-stone-500"
-                    }`}
-                  >
-                    {label.name}
-                  </button>
-                );
-              })
-            )}
           </div>
-        </div>
-        <div>
-          <p className="text-xs font-medium text-stone-500">Subtasks</p>
-          <ul className="mt-2 space-y-1">
-            {children.map((child) => (
-              <li key={child.id} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-pressed={child.completed}
-                  aria-label={child.completed ? `Mark ${child.title} incomplete` : `Mark ${child.title} complete`}
-                  onClick={() => onToggle(child.id)}
-                  className={`size-4 rounded-full border ${
-                    child.completed ? "border-indigo-600 bg-indigo-600" : "border-stone-300"
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => onOpen(child)}
-                  className={`truncate text-left text-sm ${
-                    child.completed ? "text-stone-400 line-through" : "text-stone-700"
-                  }`}
-                >
-                  {child.title}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <form
-            className="mt-2 flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!subtask.trim()) return;
-              onAddSubtask(subtask);
-              setSubtask("");
-            }}
-          >
-            <input
-              value={subtask}
-              onChange={(event) => setSubtask(event.target.value)}
-              placeholder="Add subtask"
-              aria-label="Add subtask"
-              className="w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm outline-none focus:border-indigo-400"
-            />
-            <button type="submit" className="rounded-md px-2 text-sm text-indigo-700">
-              Add
-            </button>
-          </form>
-        </div>
-        <div>
-          <p className="text-xs font-medium text-stone-500">Notes</p>
-          <ul className="mt-2 space-y-2">
-            {comments.map((comment) => (
-              <li key={comment.id} className="rounded-lg bg-stone-50 px-3 py-2">
-                <p className="text-sm text-stone-700">{comment.body}</p>
-                <div className="mt-1 flex items-center justify-between">
-                  <time className="text-[11px] text-stone-400">
-                    {new Date(comment.createdAt).toLocaleString()}
-                  </time>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteComment(comment.id)}
-                    className="text-[11px] text-stone-400 hover:text-rose-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <form
-            className="mt-2 flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!note.trim()) return;
-              onAddComment(note);
-              setNote("");
-            }}
-          >
-            <input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Add a note"
-              aria-label="Add a note"
-              className="w-full rounded-md border border-stone-200 px-2 py-1.5 text-sm outline-none focus:border-indigo-400"
-            />
-            <button type="submit" className="rounded-md px-2 text-sm text-indigo-700">
-              Add
-            </button>
-          </form>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2 border-t border-stone-100 px-4 py-3">
-        <button
-          type="button"
-          onClick={onDuplicate}
-          className="rounded-lg px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100"
-        >
-          Duplicate
-        </button>
-        {task.recurrence ? (
-          <button
-            type="button"
-            onClick={onCompleteForever}
-            className="rounded-lg px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100"
-          >
-            Complete and stop repeating
-          </button>
         ) : null}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="ml-auto rounded-lg px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50"
-        >
-          Delete
-        </button>
+        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
+                onClick={() => onToggle(task.id)}
+                className={`mt-1 size-5 shrink-0 rounded-full border-2 ${tone.circle}`}
+              />
+              <input
+                id="task-title"
+                aria-label="Task name"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                onBlur={saveTitle}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                className="w-full bg-transparent text-lg font-medium outline-none"
+              />
+            </div>
+            <textarea
+              aria-label="Description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              onBlur={() => onPatch({ description })}
+              rows={3}
+              placeholder="Description"
+              className="w-full resize-y bg-transparent text-sm text-neutral-300 outline-none placeholder:text-neutral-600"
+            />
+            <div>
+              <ul className="space-y-1">
+                {children.map((child) => {
+                  const childTone = PRIORITY_META[child.priority] ?? PRIORITY_META[4];
+                  return (
+                    <li key={child.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={child.completed ? `Mark ${child.title} incomplete` : `Mark ${child.title} complete`}
+                        onClick={() => onToggle(child.id)}
+                        className={`size-4 rounded-full border-2 ${childTone.circle} ${child.completed ? "bg-white/20" : ""}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onOpen(child)}
+                        className={`truncate text-left text-sm ${child.completed ? "text-neutral-500 line-through" : "text-neutral-200"}`}
+                      >
+                        {child.title}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {adding ? (
+                <form
+                  className="mt-2 flex gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!subtask.trim()) return;
+                    onAddSubtask(subtask);
+                    setSubtask("");
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={subtask}
+                    onChange={(event) => setSubtask(event.target.value)}
+                    placeholder="Sub-task name"
+                    aria-label="Sub-task name"
+                    className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-500"
+                  />
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="mt-2 inline-flex items-center gap-2 text-sm text-neutral-400 hover:text-neutral-200"
+                >
+                  <Plus className="size-4" />
+                  Add sub-task
+                </button>
+              )}
+            </div>
+            {comments.length > 0 ? (
+              <ul className="space-y-2">
+                {comments.map((comment) => (
+                  <li key={comment.id} className="rounded-lg bg-white/5 px-3 py-2">
+                    <p className="text-sm text-neutral-200">{comment.body}</p>
+                    <div className="mt-1 flex items-center justify-between">
+                      <time className="text-[11px] text-neutral-500">{new Date(comment.createdAt).toLocaleString()}</time>
+                      <button type="button" onClick={() => onDeleteComment(comment.id)} className="text-[11px] text-neutral-500 hover:text-[var(--accent)]">
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <form
+              className="flex items-center gap-2 rounded-full border border-white/10 px-2 py-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!note.trim()) return;
+                onAddComment(note);
+                setNote("");
+              }}
+            >
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-500 text-xs font-medium text-white">
+                {initial}
+              </span>
+              <input
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Comment"
+                aria-label="Comment"
+                className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-500"
+              />
+            </form>
+          </div>
+          <aside className="min-h-0 overflow-y-auto border-t border-white/5 bg-[var(--panel-2)] px-4 py-2 md:border-t-0 md:border-l">
+            <Meta label="Project">
+              <select
+                aria-label="Project"
+                disabled={Boolean(task.parentId)}
+                value={task.projectId}
+                onChange={(event) => onPatch({ projectId: event.target.value })}
+                className="max-w-[150px] bg-transparent text-right text-sm outline-none"
+              >
+                {doc.projects
+                  .filter((item) => !item.archived || item.id === task.projectId)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+              </select>
+            </Meta>
+            {sections.length > 0 ? (
+              <Meta label="Section">
+                <select
+                  aria-label="Section"
+                  disabled={Boolean(task.parentId)}
+                  value={task.sectionId ?? ""}
+                  onChange={(event) => onPatch({ sectionId: event.target.value || null })}
+                  className="max-w-[150px] bg-transparent text-right text-sm outline-none"
+                >
+                  <option value="">No section</option>
+                  {sections.map((section) => (
+                    <option key={section.id} value={section.id}>
+                      {section.name}
+                    </option>
+                  ))}
+                </select>
+              </Meta>
+            ) : null}
+            <Meta label="Date" valueClass={task.dueTime ? "text-violet-300" : "text-neutral-200"}>
+              <span className="sr-only">{task.due ? formatWhen(task.due, task.dueTime, new Date().toISOString().slice(0, 10)) : "No date"}</span>
+              <input
+                type="date"
+                aria-label="Date"
+                value={task.due ?? ""}
+                onChange={(event) => onPatch({ due: event.target.value || null })}
+                className="bg-transparent text-right text-sm outline-none"
+              />
+              <input
+                type="time"
+                aria-label="Time"
+                value={task.dueTime ?? ""}
+                onChange={(event) => onPatch({ dueTime: event.target.value || null })}
+                className="bg-transparent text-right text-sm outline-none"
+              />
+            </Meta>
+            <Meta label="Repeat">
+              <select
+                aria-label="Repeat"
+                value={repeatValue}
+                onChange={(event) => onPatch({ recurrence: recurrenceFromKey(event.target.value) })}
+                className="max-w-[160px] bg-transparent text-right text-sm outline-none"
+              >
+                <option value="none">No repeat</option>
+                <option value="day">Every day</option>
+                <option value="weekday">Every weekday</option>
+                <option value="week">Every week</option>
+                <option value="month">Every month</option>
+                <option value="year">Every year</option>
+                {repeatValue === "custom" ? <option value="custom">{describeRecurrence(task.recurrence)}</option> : null}
+              </select>
+            </Meta>
+            <Meta label="Deadline">
+              <input
+                type="date"
+                aria-label="Deadline"
+                value={task.deadline ?? ""}
+                onChange={(event) => onPatch({ deadline: event.target.value || null })}
+                className="bg-transparent text-right text-sm outline-none"
+              />
+            </Meta>
+            <Meta label="Priority">
+              <span className={`inline-flex items-center gap-1 text-sm ${tone.flag}`}>
+                <Flag className="size-3.5" fill="currentColor" />
+                <select
+                  aria-label="Priority"
+                  value={task.priority}
+                  onChange={(event) => onPatch({ priority: Number(event.target.value) })}
+                  className="bg-transparent outline-none"
+                >
+                  {[1, 2, 3, 4].map((level) => (
+                    <option key={level} value={level}>
+                      P{level}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </Meta>
+            <div className="border-b border-white/5 py-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-400">Labels</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {doc.labels.length === 0 ? <span className="text-xs text-neutral-500">None yet</span> : null}
+                {doc.labels.map((label) => {
+                  const selected = task.labelIds.includes(label.id);
+                  const styles = COLOR_STYLES[label.color] ?? COLOR_STYLES.indigo;
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() =>
+                        onPatch({
+                          labelIds: selected
+                            ? task.labelIds.filter((id) => id !== label.id)
+                            : [...task.labelIds, label.id],
+                        })
+                      }
+                      className={`rounded-full px-2 py-0.5 text-xs ${selected ? styles.chip : "bg-white/5 text-neutral-500"}`}
+                    >
+                      {selected ? label.name : `+ ${label.name}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <Meta label="Reminders">
+              <select
+                aria-label="Reminders"
+                value={task.reminder && task.dueTime && task.reminder === task.dueTime ? "due" : task.reminder ? "custom" : "none"}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === "none") onPatch({ reminder: null });
+                  else if (value === "due") onPatch({ reminder: task.dueTime || "09:00" });
+                }}
+                className="max-w-[150px] bg-transparent text-right text-sm outline-none"
+              >
+                <option value="none">None</option>
+                <option value="due">At time of task</option>
+                <option value="custom">{reminderLabel === "At time of task" || reminderLabel === "None" ? "Custom" : reminderLabel}</option>
+              </select>
+              <input
+                type="time"
+                aria-label="Reminder time"
+                value={task.reminder ?? ""}
+                onChange={(event) => onPatch({ reminder: event.target.value || null })}
+                className="bg-transparent text-right text-sm outline-none"
+              />
+            </Meta>
+            <Meta label="Location">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="size-3.5 text-neutral-500" />
+                <input
+                  aria-label="Location"
+                  value={location}
+                  onChange={(event) => setLocation(event.target.value)}
+                  onBlur={() => onPatch({ location })}
+                  placeholder="Add"
+                  className="w-28 bg-transparent text-right text-sm outline-none placeholder:text-neutral-500"
+                />
+              </span>
+            </Meta>
+          </aside>
+        </div>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+function Meta({ label, children }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/5 py-3 text-sm">
+      <span className="shrink-0 text-neutral-400">{label}</span>
+      <span className="flex min-w-0 items-center justify-end gap-2 text-neutral-100">{children}</span>
+    </div>
   );
 }

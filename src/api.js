@@ -70,6 +70,29 @@ export const logoutAccount = async () => {
   }
 };
 
+export const updateAccount = async (patch) => {
+  const response = await request("/auth/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) await errorFrom(response, "Could not update the account.");
+  const user = await response.json();
+  const session = getSession();
+  if (session) saveSession({ token: session.token, user });
+  return user;
+};
+
+export const deleteAccount = async (password) => {
+  const response = await request("/auth/me", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (response.status === 204) return;
+  if (!response.ok) await errorFrom(response, "Could not delete the account.");
+};
+
 export const fetchMe = async () => {
   const response = await request("/auth/me");
   if (response.status === 401) throw new ApiError("Sign in again.", 401);

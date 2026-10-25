@@ -43,7 +43,7 @@ const tooManyAttempts = (request) => {
 const corsHeaders = (request) => ({
   "Access-Control-Allow-Origin": request.headers.origin || "*",
   "Access-Control-Allow-Headers": "authorization, content-type, if-match",
-  "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Max-Age": "86400",
   Vary: "Origin",
 });
@@ -231,6 +231,95 @@ const handleAuth = async (request, response, url) => {
       return;
     }
     sendJson(request, response, 200, publicUser(user));
+    return;
+  }
+
+  if (request.method === "PATCH" && url.pathname === "/api/auth/me") {
+    const user = currentUser(request);
+    if (!user) {
+      sendJson(request, response, 401, { error: "Sign in again." });
+      return;
+    }
+    if (tooManyAttempts(request)) {
+      sendJson(request, response, 429, { error: "Too many attempts. Try again later." });
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(request, 100_000);
+    } catch {
+      sendJson(request, response, 400, { error: "Account details could not be read." });
+      return;
+    }
+    const email = body.email === undefined ? user.email : emailOf(body.email);
+    const username = body.username === undefined ? user.username : usernameOf(body.username);
+    const nextPassword = body.newPassword === undefined || body.newPassword === "" ? "" : passwordOf(body.newPassword);
+    if (!email || !username || (body.newPassword && !nextPassword)) {
+      sendJson(request, response, 400, {
+        error: "Use an email, a username, and a password of at least 8 characters.",
+      });
+      return;
+    }
+    const changingSecret = email !== user.email || Boolean(nextPassword);
+    if (changingSecret) {
+      const current = typeof body.currentPassword === "string" ? body.currentPassword : "";
+      const accepted = await checkPassword(current, user.password_hash);
+      if (!accepted) {
+        sendJson(request, response, 401, { error: "Current password was not accepted." });
+        return;
+      }
+    }
+    const updated = await db.updateUser(user.id, {
+      email,
+      username,
+      passwordHash: nextPassword ? await hashPassword(nextPassword) : undefined,
+    });
+    if (updated.missing) {
+      sendJson(request, response, 401, { error: "Sign in again." });
+      return;
+    }
+    if (updated.error === "email") {
+      sendJson(request, response, 409, { error: "That email is already registered." });
+      return;
+    }
+    if (updated.error === "username") {
+      sendJson(request, response, 409, { error: "That username is already taken." });
+      return;
+    }
+    sendJson(request, response, 200, publicUser(updated.user));
+    return;
+  }
+
+  if (request.method === "DELETE" && url.pathname === "/api/auth/me") {
+    const user = currentUser(request);
+    if (!user) {
+      sendJson(request, response, 401, { error: "Sign in again." });
+      return;
+    }
+    if (tooManyAttempts(request)) {
+      sendJson(request, response, 429, { error: "Too many attempts. Try again later." });
+      return;
+    }
+    let body;
+    try {
+      body = await readBody(request, 100_000);
+    } catch {
+      sendJson(request, response, 400, { error: "Account details could not be read." });
+      return;
+    }
+    const current = typeof body.password === "string" ? body.password : "";
+    const accepted = await checkPassword(current, user.password_hash);
+    if (!accepted) {
+      sendJson(request, response, 401, { error: "Current password was not accepted." });
+      return;
+    }
+    await db.deleteUser(user.id);
+    const group = listeners.get(user.id);
+    if (group) {
+      for (const listener of group) listener.end();
+      listeners.delete(user.id);
+    }
+    sendJson(request, response, 204, undefined);
     return;
   }
 

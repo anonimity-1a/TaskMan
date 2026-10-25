@@ -156,5 +156,29 @@ export const openDatabase = async ({ file, legacyFile }) => {
         session.revoked_at = new Date().toISOString();
         await persist();
       }),
+    updateUser: (userId, patch) =>
+      enqueue(async () => {
+        const user = userById(userId);
+        if (!user) return { missing: true };
+        if (patch.email && patch.email !== user.email) {
+          if (userByEmail(patch.email)) return { error: "email" };
+          user.email = patch.email;
+        }
+        if (patch.username && patch.username !== user.username) {
+          if (userByUsername(patch.username)) return { error: "username" };
+          user.username = patch.username;
+        }
+        if (patch.passwordHash) user.password_hash = patch.passwordHash;
+        await persist();
+        return { user };
+      }),
+    deleteUser: (userId) =>
+      enqueue(async () => {
+        const id = requireUserId(userId);
+        state.users = state.users.filter((user) => user.id !== id);
+        state.tasks = state.tasks.filter((row) => row.user_id !== id);
+        state.sessions = state.sessions.filter((session) => session.user_id !== id);
+        await persist();
+      }),
   };
 };

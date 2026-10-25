@@ -1,24 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleHelp, Columns3, List, Menu, Plus } from "lucide-react";
+import { ChevronRight, Download, Menu, MoreHorizontal, Upload } from "lucide-react";
 import {
+  deleteAccount,
   fetchMe,
   findLegacyDocument,
   loadSnapshot,
   logoutAccount,
   saveSnapshot,
+  updateAccount,
   watchRevisions,
 } from "./api.js";
 import { clearLegacyConnection, clearSession, getSession, saveSession } from "./auth.js";
 import { clearTaskCache, readTaskCache, writeTaskCache } from "./cache.js";
 import { AuthScreen } from "./components/AuthScreen.jsx";
 import { Board } from "./components/Board.jsx";
+import { BrowseView } from "./components/BrowseView.jsx";
+import { DisplayMenu } from "./components/DisplayMenu.jsx";
 import { HelpDialog } from "./components/HelpDialog.jsx";
 import { MonthBoard } from "./components/MonthBoard.jsx";
 import { QuickAdd } from "./components/QuickAdd.jsx";
+import { SettingsDialog } from "./components/SettingsDialog.jsx";
+import { ReportingView } from "./components/ReportingView.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
 import { TaskDetail } from "./components/TaskDetail.jsx";
 import { TaskList } from "./components/TaskList.jsx";
-import { localTime } from "./dates.js";
+import { exportTodoistCsv, importTodoistCsv } from "./csv.js";
+import { loadDisplay, saveDisplay } from "./display.js";
+import { automaticReminder, localTime, setDatePrefs } from "./dates.js";
+import { applyTheme, clearSettings, loadSettings, playCompleteSound, saveSettings } from "./settings.js";
+import { applyPriorityShorthand, parseQuickAdd } from "./parse.js";
 import {
   addComment,
   addFilter,
@@ -39,17 +49,14 @@ import {
   duplicateTask,
   formatDue,
   localISODate,
-  moveTaskToSection,
   projectById,
   renameLabel,
   renameProject,
   renameSection,
   reorderTask,
-  setFilterColor,
-  setLabelColor,
   setProjectArchived,
   setProjectColor,
-  setProjectView,
+  setProjectParent,
   stampReminder,
   taskById,
   toggleFavorite,
@@ -65,17 +72,26 @@ const titles = {
   upcoming: "Upcoming",
   completed: "Completed",
   search: "Search",
+  browse: "Filters & Labels",
+  reporting: "Reporting",
 };
 
 export function App() {
   const [doc, setDoc] = useState(null);
-  const [view, setView] = useState({ kind: "today" });
+  const [settings, setSettings] = useState(() => {
+    const initial = loadSettings(getSession()?.user?.id);
+    applyTheme(initial);
+    return initial;
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [view, setView] = useState(() => ({ kind: loadSettings(getSession()?.user?.id).homeView }));
   const [quickAdd, setQuickAdd] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
-  const [sort, setSort] = useState("priority");
-  const [upcomingLayout, setUpcomingLayout] = useState("agenda");
+  const [display, setDisplay] = useState(() => loadDisplay({ kind: "inbox" }));
   const [search, setSearch] = useState("");
   const [sectionName, setSectionName] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [dataMenu, setDataMenu] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [help, setHelp] = useState(false);
@@ -84,9 +100,10 @@ export function App() {
   );
   const [user, setUser] = useState(undefined);
   const [legacy, setLegacy] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchRef = useRef(null);
-  const priorView = useRef({ kind: "today" });
+  const importRef = useRef(null);
+  const priorView = useRef({ kind: "inbox" });
   const firedReminders = useRef(new Set());
   const revisionRef = useRef(0);
   const savingRef = useRef(0);
@@ -95,6 +112,8 @@ export function App() {
   const pumpingRef = useRef(false);
   const userIdRef = useRef(null);
   const logoutRef = useRef(async () => {});
+  const chordRef = useRef("");
+  setDatePrefs(settings);
   const today = localISODate();
 
   const applySnapshot = useCallback((snapshot, userId) => {
@@ -127,6 +146,22 @@ export function App() {
   useEffect(() => {
     userIdRef.current = user?.id ?? null;
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const next = loadSettings(user.id);
+    setSettings(next);
+    applyTheme(next);
+  }, [user?.id]);
+
+  useEffect(() => {
+    applyTheme(settings);
+    if (settings.appearance !== "system") return undefined;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyTheme(settings);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [settings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,9 +348,15 @@ export function App() {
   );
 
   useEffect(() => {
-    setSort(view.kind === "today" ? "priority" : view.kind === "upcoming" ? "date" : "manual");
-    setUpcomingLayout("agenda");
+    setDisplay(loadDisplay(view));
+    setMoreOpen(false);
+    setDataMenu(false);
   }, [view.kind, view.id]);
+
+  const updateDisplay = (next) => {
+    setDisplay(next);
+    saveDisplay(view, next);
+  };
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -338,12 +379,24 @@ export function App() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
-        searchRef.current?.focus();
+        setSidebarOpen(true);
+        setTimeout(() => searchRef.current?.focus(), 0);
       }
       if (event.key === "Escape") {
         if (quickAdd || typing) return;
         setHelp(false);
+        setSettingsOpen(false);
         setSelectedId(null);
+      }
+      if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const key = event.key.toLowerCase();
+        if (chordRef.current === "o" && key === "s") {
+          event.preventDefault();
+          setSettingsOpen(true);
+          chordRef.current = "";
+          return;
+        }
+        chordRef.current = key === "o" ? "o" : "";
       }
       if (event.key === "?" && !typing && !quickAdd) setHelp(true);
     };
@@ -368,7 +421,11 @@ export function App() {
       setToast(`Reminder: ${due.map((task) => task.title).join(", ")}`);
       for (const task of due) {
         try {
-          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          if (
+            settings.reminders.desktop &&
+            typeof Notification !== "undefined" &&
+            Notification.permission === "granted"
+          ) {
             new Notification("TaskMan", { body: task.title });
           }
         } catch {
@@ -380,22 +437,71 @@ export function App() {
     check();
     const timer = setInterval(check, 20000);
     return () => clearInterval(timer);
-  }, [commit, doc]);
+  }, [commit, doc, settings.reminders.desktop]);
 
   const selection = useMemo(
-    () => (doc ? selectView(doc, view, today, sort) : null),
-    [doc, sort, today, view],
+    () => (doc ? selectView(doc, view, today, display) : null),
+    [doc, display, today, view],
   );
   const counts = useMemo(() => (doc ? countsFor(doc, today) : null), [doc, today]);
 
   const handleToggle = (id) => {
     const task = taskById(doc, id);
-    const next = toggleTask(doc, id);
+    if (task && !task.completed && settings.soundDesktop) playCompleteSound();
+    const next = toggleTask(doc, id, { resetSubtasks: settings.resetSubtasks });
     commit(next);
     if (task && !task.completed && task.recurrence && task.due) {
       const updated = next.tasks.find((item) => item.id === id);
       if (updated?.due) setToast(`Next due ${formatDue(updated.due, today)}`);
     }
+  };
+
+  const addFromTitle = (title, group) => {
+    const parsed = parseQuickAdd(title, doc, today);
+    if (!parsed.title) return;
+    const add = group?.add ?? {};
+    const projectId =
+      add.projectId ?? (view.kind === "project" ? view.id : (parsed.projectId ?? "inbox"));
+    const labelIds = [
+      ...new Set([
+        ...(parsed.labelIds ?? []),
+        ...(add.labelIds ?? []),
+        ...(view.kind === "label" ? [view.id] : []),
+      ]),
+    ];
+    const next = addTaskFromResolved(doc, {
+      title: parsed.title,
+      projectId,
+      due: parsed.due ?? ("due" in add ? add.due : view.kind === "today" ? today : null),
+      dueTime: parsed.dueTime ?? null,
+      priority: parsed.priority ?? add.priority ?? 4,
+      recurrence: parsed.recurrence ?? null,
+      labelIds,
+      newLabels: parsed.newLabels ?? [],
+      parentId: null,
+      sectionId: "sectionId" in add ? add.sectionId : null,
+      description: "",
+      deadline: "deadline" in add ? add.deadline : null,
+      reminder: automaticReminder(parsed.dueTime, settings.reminders.automatic),
+    });
+    if (next !== doc) commit(next);
+  };
+
+  const moveToGroup = (id, group) => {
+    const task = taskById(doc, id);
+    if (!task || !group?.add) return;
+    const add = group.add;
+    const patch = {};
+    if ("priority" in add) patch.priority = add.priority;
+    if ("sectionId" in add) patch.sectionId = add.sectionId;
+    if ("due" in add) patch.due = add.due;
+    if ("deadline" in add) patch.deadline = add.deadline;
+    if (add.projectId && add.projectId !== task.projectId) patch.projectId = add.projectId;
+    if (add.labelIds?.length) {
+      patch.labelIds = [...new Set([...task.labelIds, ...add.labelIds])];
+    }
+    if (Object.keys(patch).length === 0) return;
+    commit(updateTask(doc, id, patch));
   };
 
   const signIn = async (session) => {
@@ -417,7 +523,7 @@ export function App() {
 
   if (user === undefined) {
     return (
-      <main className="grid h-full place-items-center text-sm text-stone-500">Loading tasks…</main>
+      <main className="grid h-full place-items-center text-sm text-neutral-400">Loading tasks…</main>
     );
   }
 
@@ -427,10 +533,10 @@ export function App() {
 
   if (!doc || !selection || !counts) {
     return (
-      <main className="grid h-full place-items-center gap-3 px-6 text-center text-sm text-stone-500">
+      <main className="grid h-full place-items-center gap-3 px-6 text-center text-sm text-neutral-400">
         <p>{error || "Loading tasks…"}</p>
         {error ? (
-          <button type="button" onClick={logout} className="text-indigo-700">
+          <button type="button" onClick={logout} className="text-[var(--accent)]">
             Log out
           </button>
         ) : null}
@@ -444,8 +550,10 @@ export function App() {
   const selected = selectedId ? taskById(doc, selectedId) : null;
   const heading =
     project?.name ?? label?.name ?? filter?.name ?? titles[view.kind] ?? "Tasks";
-  const board = view.kind === "project" && project?.view === "board";
-  const month = view.kind === "upcoming" && upcomingLayout === "month";
+  const board = display.layout === "board" && view.kind !== "browse" && view.kind !== "reporting";
+  const month = display.layout === "calendar" && view.kind !== "browse" && view.kind !== "reporting";
+  const sequence = selection.visible ?? [];
+  const selectedIndex = sequence.findIndex((task) => task.id === selectedId);
   const emptyCopy = {
     inbox: "Inbox is empty. Add a task to start.",
     today: "Nothing due today.",
@@ -457,167 +565,227 @@ export function App() {
     search: search.trim() ? "No matching tasks." : "Type to search tasks.",
   };
 
+  const runSearch = (value) => {
+    setSearch(value);
+    if (value.trim()) changeView({ kind: "search", query: value });
+    else changeView(priorView.current.kind === "search" ? { kind: "inbox" } : priorView.current);
+  };
+
   return (
-    <div className="relative flex h-full overflow-hidden">
-      <Sidebar
-        doc={doc}
-        view={view}
-        counts={counts}
-        mobileOpen={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        accountName={user.username}
-        onLogout={logout}
-        onView={(next) => {
-          changeView(next);
-          setMenuOpen(false);
-        }}
-        onAddProject={(name) => commit(addProject(doc, name))}
-        onRenameProject={(id, name) => commit(renameProject(doc, id, name))}
-        onDeleteProject={(id) => {
-          commit(deleteProject(doc, id));
-          if (view.kind === "project" && view.id === id) changeView({ kind: "inbox" });
-        }}
-        onCycleProject={(item) => commit(setProjectColor(doc, item.id, cycleColor(item.color)))}
-        onFavoriteProject={(id) => commit(toggleFavorite(doc, "project", id))}
-        onAddLabel={(name) => commit(addLabel(doc, name))}
-        onRenameLabel={(id, name) => commit(renameLabel(doc, id, name))}
-        onDeleteLabel={(id) => {
-          commit(deleteLabel(doc, id));
-          if (view.kind === "label" && view.id === id) changeView({ kind: "inbox" });
-        }}
-        onCycleLabel={(item) => commit(setLabelColor(doc, item.id, cycleColor(item.color)))}
-        onFavoriteLabel={(id) => commit(toggleFavorite(doc, "label", id))}
-        onAddFilter={(name, query) => commit(addFilter(doc, name, query))}
-        onRenameFilter={(id, name) => commit(updateFilter(doc, id, { name }))}
-        onDeleteFilter={(id) => {
-          commit(deleteFilter(doc, id));
-          if (view.kind === "filter" && view.id === id) changeView({ kind: "inbox" });
-        }}
-        onCycleFilter={(item) => commit(setFilterColor(doc, item.id, cycleColor(item.color)))}
-        onFavoriteFilter={(id) => commit(toggleFavorite(doc, "filter", id))}
-      />
-      <main className="relative flex min-w-0 flex-1 flex-col bg-stone-50">
-        <header className="flex flex-wrap items-center justify-between gap-3 px-4 pt-5 pb-4 md:px-8 md:pt-6">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              aria-label="Open menu"
-              onClick={() => setMenuOpen(true)}
-              className="rounded-lg p-2 text-stone-600 hover:bg-stone-200/70 md:hidden"
-            >
-              <Menu className="size-5" />
-            </button>
-            <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold tracking-tight text-stone-900">
-                {heading}
-              </h1>
-              <p className="text-sm text-stone-500">
-                {selection.open.length} open
-                {project?.archived ? " · Archived" : ""}
-              </p>
-            </div>
+    <div className="relative flex h-full overflow-hidden bg-[var(--canvas)] text-neutral-100">
+      {sidebarOpen ? (
+        <div className="fixed inset-y-0 left-0 z-40 flex md:static">
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="fixed inset-0 bg-black/50 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="relative z-10 h-full">
+            <Sidebar
+              doc={doc}
+              view={view}
+              counts={counts}
+              search={search}
+              searchRef={searchRef}
+              onSearch={runSearch}
+              accountName={user.username}
+              avatar={settings.avatar}
+              showCounts={settings.showCounts}
+              sidebarItems={settings.sidebar}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onLogout={logout}
+              onClose={() => setSidebarOpen(false)}
+              onQuickAdd={() => openQuickAdd()}
+              onHelp={() => setHelp(true)}
+              onView={(next) => changeView(next)}
+              onAddProject={(input) => {
+                const next = addProject(doc, input);
+                if (next === doc) return;
+                const created = next.projects.find((item) => !doc.projects.some((project) => project.id === item.id));
+                commit(next);
+                if (!created) return;
+                const nextView = { kind: "project", id: created.id };
+                saveDisplay(nextView, { ...loadDisplay(nextView), layout: created.view === "calendar" ? "calendar" : created.view === "board" ? "board" : "list" });
+                changeView(nextView);
+              }}
+              onRenameProject={(id, name) => commit(renameProject(doc, id, name))}
+              onDeleteProject={(id) => {
+                commit(deleteProject(doc, id));
+                if (view.kind === "project" && view.id === id) changeView({ kind: "inbox" });
+              }}
+              onParentProject={(id, parentId) => commit(setProjectParent(doc, id, parentId))}
+              onCycleProject={(id) => {
+                const item = projectById(doc, id);
+                if (item) commit(setProjectColor(doc, id, cycleColor(item.color)));
+              }}
+              onFavoriteProject={(id) => commit(toggleFavorite(doc, "project", id))}
+              teams={settings.teams ?? []}
+            />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="relative">
-              <span className="sr-only">Search</span>
-              <input
-                ref={searchRef}
-                value={search}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSearch(value);
-                  if (value.trim()) changeView({ kind: "search", query: value });
-                  else changeView(priorView.current.kind === "search" ? { kind: "inbox" } : priorView.current);
-                }}
-                placeholder="Search"
-                className="w-40 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
-              />
-            </label>
-            {view.kind === "project" && project ? (
-              <div className="flex rounded-lg bg-stone-200/70 p-0.5">
-                <button
-                  type="button"
-                  aria-label="List"
-                  aria-pressed={project.view !== "board"}
-                  onClick={() => commit(setProjectView(doc, project.id, "list"))}
-                  className={`rounded-md px-2 py-1.5 ${project.view !== "board" ? "bg-white text-stone-800" : "text-stone-500"}`}
-                >
-                  <List className="size-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Board"
-                  aria-pressed={project.view === "board"}
-                  onClick={() => commit(setProjectView(doc, project.id, "board"))}
-                  className={`rounded-md px-2 py-1.5 ${project.view === "board" ? "bg-white text-stone-800" : "text-stone-500"}`}
-                >
-                  <Columns3 className="size-4" aria-hidden="true" />
-                </button>
-              </div>
-            ) : null}
-            {view.kind === "upcoming" ? (
-              <div className="flex rounded-lg bg-stone-200/70 p-0.5 text-sm">
-                <button
-                  type="button"
-                  aria-pressed={upcomingLayout === "agenda"}
-                  onClick={() => setUpcomingLayout("agenda")}
-                  className={`rounded-md px-2 py-1 ${upcomingLayout === "agenda" ? "bg-white text-stone-800" : "text-stone-500"}`}
-                >
-                  Agenda
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={upcomingLayout === "month"}
-                  onClick={() => setUpcomingLayout("month")}
-                  className={`rounded-md px-2 py-1 ${upcomingLayout === "month" ? "bg-white text-stone-800" : "text-stone-500"}`}
-                >
-                  Month
-                </button>
-              </div>
-            ) : null}
-            {project ? (
+        </div>
+      ) : null}
+      <main className="relative flex min-w-0 flex-1 flex-col bg-[var(--canvas)]">
+        <header className="flex items-center justify-between gap-3 px-4 pt-5 pb-4 md:px-10">
+          <div className="flex min-w-0 items-center gap-2">
+            {sidebarOpen ? null : (
               <button
                 type="button"
-                onClick={() => commit(setProjectArchived(doc, project.id, !project.archived))}
-                className="rounded-lg px-2 py-1.5 text-sm text-stone-600 hover:bg-stone-200/70"
+                aria-label="Open menu"
+                onClick={() => setSidebarOpen(true)}
+                className="rounded-lg p-2 text-neutral-300 hover:bg-white/5"
               >
-                {project.archived ? "Unarchive" : "Archive"}
+                <Menu className="size-5" />
               </button>
-            ) : null}
-            {!month ? (
-              <select
-                aria-label="Sort"
-                value={sort}
-                onChange={(event) => setSort(event.target.value)}
-                className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-sm text-stone-700"
-              >
-                <option value="manual">Manual</option>
-                <option value="priority">Priority</option>
-                <option value="date">Date</option>
-                <option value="name">Name</option>
-              </select>
-            ) : null}
-            <button
-              type="button"
-              aria-label="Help"
-              onClick={() => setHelp(true)}
-              className="rounded-lg p-2 text-stone-500 hover:bg-stone-200/70"
-            >
-              <CircleHelp className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => openQuickAdd()}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Quick add
-            </button>
+            )}
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-semibold tracking-tight text-white">
+                {heading}
+                {project?.archived ? <span className="ml-2 text-sm font-normal text-neutral-500">Archived</span> : null}
+              </h1>
+              {project?.description ? <p className="truncate text-sm text-neutral-500">{project.description}</p> : null}
+            </div>
           </div>
+          {view.kind === "browse" || view.kind === "reporting" ? null : (
+            <div className="flex items-center gap-2">
+              <DisplayMenu display={display} onChange={updateDisplay} />
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="More view options"
+                  onClick={() => setMoreOpen((value) => !value)}
+                  className="rounded-lg p-2 text-neutral-400 hover:bg-white/5"
+                >
+                  <MoreHorizontal className="size-4" />
+                </button>
+                {moreOpen ? (
+                  <div className="absolute top-full right-0 z-20 mt-1 w-56 rounded-lg border border-white/10 bg-[var(--panel-2)] py-1 text-sm shadow-xl">
+                    {project ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          commit(setProjectArchived(doc, project.id, !project.archived));
+                          setMoreOpen(false);
+                        }}
+                        className="block w-full px-3 py-1.5 text-left hover:bg-white/5"
+                      >
+                        {project.archived ? "Unarchive project" : "Archive project"}
+                      </button>
+                    ) : null}
+                    {project ? (
+                      <form
+                        className="mt-1 flex gap-1"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          commit(addSection(doc, project.id, sectionName));
+                          setSectionName("");
+                          setMoreOpen(false);
+                        }}
+                      >
+                        <input
+                          value={sectionName}
+                          onChange={(event) => setSectionName(event.target.value)}
+                          placeholder="Add section"
+                          aria-label="Add section"
+                          className="w-full rounded bg-white/5 px-2 py-1 outline-none"
+                        />
+                      </form>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHelp(true);
+                        setMoreOpen(false);
+                      }}
+                      className="block w-full px-3 py-1.5 text-left hover:bg-white/5"
+                    >
+                      Help
+                    </button>
+                    <div
+                      className="relative"
+                      onMouseEnter={() => setDataMenu(true)}
+                      onMouseLeave={() => setDataMenu(false)}
+                    >
+                      <button
+                        type="button"
+                        aria-expanded={dataMenu}
+                        onClick={() => setDataMenu(true)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5"
+                      >
+                        Manage data
+                        <ChevronRight className="ml-auto size-4 text-neutral-500" />
+                      </button>
+                      {dataMenu ? (
+                        <div className="absolute top-0 right-[calc(100%-8px)] z-30 w-52 rounded-lg border border-white/10 bg-[var(--panel-2)] py-1 shadow-xl">
+                          <button
+                            type="button"
+                            onClick={() => importRef.current?.click()}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5"
+                          >
+                            <Download className="size-4 text-neutral-400" />
+                            Import from CSV
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const projectId = view.kind === "project" ? view.id : "inbox";
+                              const csv = exportTodoistCsv(doc, projectId);
+                              const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement("a");
+                              const safeName = (project?.name ?? heading).replace(/[^\w.-]+/g, "-");
+                              link.href = url;
+                              link.download = `${safeName || "tasks"}.csv`;
+                              link.click();
+                              URL.revokeObjectURL(url);
+                              setMoreOpen(false);
+                              setDataMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-white/5"
+                          >
+                            <Upload className="size-4 text-neutral-400" />
+                            Export to CSV
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                <input
+                  ref={importRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    setMoreOpen(false);
+                    setDataMenu(false);
+                    if (!file) return;
+                    try {
+                      const text = await file.text();
+                      const projectId = view.kind === "project" ? view.id : "inbox";
+                      const result = importTodoistCsv(doc, text, { projectId, today });
+                      if (result.error) {
+                        setToast(result.error);
+                        return;
+                      }
+                      commit(result.doc);
+                      const destination = doc.projects.find((item) => item.id === projectId)?.name ?? "Inbox";
+                      const sectionText = result.sections ? ` and ${result.sections} section${result.sections === 1 ? "" : "s"}` : "";
+                      setToast(`Imported ${result.count} task${result.count === 1 ? "" : "s"}${sectionText} into ${destination}.`);
+                    } catch {
+                      setToast("That file could not be read.");
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </header>
         {filter ? (
           <form
-            className="mx-8 mb-3"
+            className="mx-4 mb-3 md:mx-10"
             onSubmit={(event) => {
               event.preventDefault();
               const field = event.currentTarget.elements.namedItem("query");
@@ -630,33 +798,12 @@ export function App() {
               defaultValue={filter.query}
               aria-label="Filter query"
               onBlur={(event) => commit(updateFilter(doc, filter.id, { query: event.target.value }))}
-              className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm outline-none"
             />
-          </form>
-        ) : null}
-        {project ? (
-          <form
-            className="mx-8 mb-3 flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              commit(addSection(doc, project.id, sectionName));
-              setSectionName("");
-            }}
-          >
-            <input
-              value={sectionName}
-              onChange={(event) => setSectionName(event.target.value)}
-              placeholder="Add section"
-              aria-label="Add section"
-              className="w-56 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-indigo-400"
-            />
-            <button type="submit" className="rounded-lg px-2 text-sm text-indigo-700">
-              Add section
-            </button>
           </form>
         ) : null}
         {legacy ? (
-          <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900 md:mx-8">
+          <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm md:mx-10">
             <p>Tasks already on this computer can be copied to your account.</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setLegacy(null)} className="px-2 py-1">
@@ -668,7 +815,7 @@ export function App() {
                   commit(legacy);
                   setLegacy(null);
                 }}
-                className="rounded-lg bg-indigo-600 px-3 py-1 text-white"
+                className="rounded-lg bg-[var(--accent)] px-3 py-1 text-white"
               >
                 Copy tasks
               </button>
@@ -676,14 +823,32 @@ export function App() {
           </div>
         ) : null}
         {error ? (
-          <p className="mx-4 mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 md:mx-8">{error}</p>
+          <p className="mx-4 mb-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-200 md:mx-10">{error}</p>
         ) : null}
-        <div
-          className={`mx-8 mb-8 min-h-0 flex-1 rounded-2xl border border-stone-200 bg-white shadow-sm ${
-            board || month ? "overflow-hidden p-3" : "overflow-y-auto px-4 py-3"
-          }`}
-        >
-          {board ? (
+        <div className={`min-h-0 flex-1 px-4 pb-8 md:px-10 ${board || month ? "overflow-hidden" : "overflow-y-auto"}`}>
+          {view.kind === "browse" ? (
+            <BrowseView
+              doc={doc}
+              counts={counts}
+              onOpenLabel={(id) => changeView({ kind: "label", id })}
+              onOpenFilter={(id) => changeView({ kind: "filter", id })}
+              onOpenCompleted={() => changeView({ kind: "completed" })}
+              onAddLabel={(name) => commit(addLabel(doc, name))}
+              onDeleteLabel={(id) => {
+                commit(deleteLabel(doc, id));
+                if (view.kind === "label" && view.id === id) changeView({ kind: "browse" });
+              }}
+              onAddFilter={(name, query) => commit(addFilter(doc, name, query))}
+              onDeleteFilter={(id) => {
+                commit(deleteFilter(doc, id));
+                if (view.kind === "filter" && view.id === id) changeView({ kind: "browse" });
+              }}
+              onRenameLabel={(id, name) => commit(renameLabel(doc, id, name))}
+              onRenameFilter={(id, name) => commit(updateFilter(doc, id, { name }))}
+            />
+          ) : view.kind === "reporting" ? (
+            <ReportingView doc={doc} counts={counts} />
+          ) : board ? (
             <Board
               doc={doc}
               today={today}
@@ -691,15 +856,16 @@ export function App() {
               selectedId={selectedId}
               onOpen={(task) => setSelectedId(task.id)}
               onToggle={handleToggle}
-              onMoveSection={(id, sectionId) => commit(moveTaskToSection(doc, id, sectionId))}
-              onAddInSection={(sectionId) => openQuickAdd({ sectionId, projectId: project.id })}
+              onMoveToGroup={moveToGroup}
+              onAddTask={addFromTitle}
               onRenameSection={(id, name) => commit(renameSection(doc, id, name))}
               onDeleteSection={(id) => commit(deleteSection(doc, id))}
             />
           ) : month ? (
             <MonthBoard
-              doc={doc}
+              tasks={selection.visible}
               today={today}
+              weekStart={settings.weekStart}
               onOpen={(task) => setSelectedId(task.id)}
               onToggle={handleToggle}
             />
@@ -710,19 +876,15 @@ export function App() {
               selection={selection}
               empty={emptyCopy[view.kind] ?? "Nothing here."}
               selectedId={selectedId}
+              showCompleted={display.showCompleted}
               onOpen={(task) => setSelectedId(task.id)}
               onToggle={handleToggle}
               onDelete={(id) => {
                 commit(deleteTask(doc, id));
                 if (selectedId === id) setSelectedId(null);
               }}
-              onMoveSection={
-                view.kind === "project"
-                  ? (id, sectionId) => commit(moveTaskToSection(doc, id, sectionId))
-                  : undefined
-              }
               onReorder={
-                view.kind === "project" || view.kind === "inbox"
+                (view.kind === "project" || view.kind === "inbox") && display.sorting === "default"
                   ? (draggedId, targetId) => commit(reorderTask(doc, draggedId, targetId))
                   : undefined
               }
@@ -734,11 +896,7 @@ export function App() {
               onDeleteSection={
                 view.kind === "project" ? (id) => commit(deleteSection(doc, id)) : undefined
               }
-              onAddInSection={
-                view.kind === "project"
-                  ? (sectionId) => openQuickAdd({ sectionId, projectId: project.id })
-                  : undefined
-              }
+              onAddTask={addFromTitle}
             />
           )}
         </div>
@@ -747,7 +905,18 @@ export function App() {
             key={selected.id}
             doc={doc}
             task={selected}
+            accountName={user.username}
             alertsGranted={alertsGranted}
+            hasPrev={selectedIndex > 0}
+            hasNext={selectedIndex >= 0 && selectedIndex < sequence.length - 1}
+            onPrev={() => {
+              if (selectedIndex > 0) setSelectedId(sequence[selectedIndex - 1].id);
+            }}
+            onNext={() => {
+              if (selectedIndex >= 0 && selectedIndex < sequence.length - 1) {
+                setSelectedId(sequence[selectedIndex + 1].id);
+              }
+            }}
             onClose={() => setSelectedId(null)}
             onOpen={(task) => setSelectedId(task.id)}
             onPatch={(patch) => commit(updateTask(doc, selected.id, patch))}
@@ -764,9 +933,18 @@ export function App() {
               if (created) setSelectedId(created.id);
             }}
             onCompleteForever={() => commit(completeForever(doc, selected.id))}
-            onAddSubtask={(title) =>
-              commit(addTask(doc, { title, parentId: selected.id, projectId: selected.projectId }))
-            }
+            onAddSubtask={(title) => {
+              const applied = applyPriorityShorthand(title);
+              if (!applied.title) return;
+              commit(
+                addTask(doc, {
+                  title: applied.title,
+                  priority: applied.priority ?? 4,
+                  parentId: selected.id,
+                  projectId: selected.projectId,
+                }),
+              );
+            }}
             onAddComment={(body) => commit(addComment(doc, selected.id, body))}
             onDeleteComment={(id) => commit(deleteComment(doc, id))}
             onAllowAlerts={async () => {
@@ -781,6 +959,7 @@ export function App() {
         <QuickAdd
           doc={doc}
           today={today}
+          settings={settings}
           defaults={quickAdd}
           onClose={() => setQuickAdd(null)}
           onSubmit={(resolved) => {
@@ -790,11 +969,64 @@ export function App() {
           }}
         />
       ) : null}
+      {settingsOpen ? (
+        <SettingsDialog
+          user={user}
+          settings={settings}
+          doc={doc}
+          onChange={(next) => setSettings(saveSettings(user.id, next))}
+          onClose={() => setSettingsOpen(false)}
+          onUpdateAccount={async (patch) => {
+            const nextUser = await updateAccount(patch);
+            setUser(nextUser);
+            return nextUser;
+          }}
+          onDeleteAccount={async (password) => {
+            await deleteAccount(password);
+            clearSettings(user.id);
+            await logout();
+          }}
+          onReload={async () => {
+            const snapshot = await loadSnapshot();
+            applySnapshot(snapshot, user.id);
+            setToast("Reloaded the latest tasks.");
+          }}
+          onHelp={() => {
+            setSettingsOpen(false);
+            setHelp(true);
+          }}
+          onTestReminder={(kind) => {
+            const body = kind === "mobile" ? "Mobile test reminder" : "Web test reminder";
+            setToast(body);
+            if (settings.reminders.desktop && typeof Notification !== "undefined" && Notification.permission === "granted") {
+              try {
+                new Notification("TaskMan", { body: "Get groceries" });
+              } catch {
+                /* The in-app reminder still shows. */
+              }
+            }
+          }}
+          alertsGranted={alertsGranted}
+          onAllowAlerts={async () => {
+            if (typeof Notification === "undefined") return;
+            const result = await Notification.requestPermission();
+            setAlertsGranted(result === "granted");
+          }}
+          onDetachTeam={(teamId) => {
+            commit({
+              ...doc,
+              projects: doc.projects.map((project) =>
+                project.teamId === teamId ? { ...project, teamId: null } : project,
+              ),
+            });
+          }}
+        />
+      ) : null}
       {help ? <HelpDialog onClose={() => setHelp(false)} /> : null}
       {toast ? (
         <p
           role="status"
-          className="fixed bottom-4 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-full bg-stone-900 px-4 py-2 text-sm text-white shadow-lg"
+          className="fixed bottom-4 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-full bg-[#111] px-4 py-2 text-sm text-white shadow-lg"
         >
           {toast}
         </p>

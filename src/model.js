@@ -1,4 +1,4 @@
-import { COLORS, INBOX_ID, normalizePriority } from "./constants.js";
+import { COLORS, INBOX_ID, isProjectColor, normalizePriority } from "./constants.js";
 import {
   nextOccurrence,
   normalizeDate,
@@ -6,7 +6,7 @@ import {
   normalizeTime,
 } from "./dates.js";
 
-export { COLORS, COLOR_STYLES, INBOX_ID, PRIORITY_STYLES, cycleColor } from "./constants.js";
+export { COLORS, COLOR_STYLES, INBOX_ID, PRIORITY_META, PRIORITY_STYLES, cycleColor } from "./constants.js";
 export {
   describeRecurrence,
   formatDue,
@@ -27,6 +27,21 @@ export const taskById = (doc, id) => doc.tasks.find((task) => task.id === id) ??
 
 export const projectById = (doc, id) =>
   doc.projects.find((project) => project.id === id) ?? null;
+
+export const descendantProjectIds = (doc, id) => {
+  const ids = new Set([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const project of doc.projects) {
+      if (project.parentId && ids.has(project.parentId) && !ids.has(project.id)) {
+        ids.add(project.id);
+        grew = true;
+      }
+    }
+  }
+  return ids;
+};
 
 export const childrenOf = (doc, parentId) =>
   doc.tasks
@@ -75,9 +90,14 @@ const ensureLabel = (doc, name) => {
   };
 };
 
-export const addProject = (doc, name) => {
-  const trimmed = clip(name, 80);
+export const addProject = (doc, input) => {
+  const source = typeof input === "string" ? { name: input } : (input ?? {});
+  const trimmed = clip(source.name, 120);
   if (!trimmed) return doc;
+  const parentId = source.parentId ?? null;
+  const parent = parentId && parentId !== INBOX_ID ? projectById(doc, parentId) : null;
+  if (parentId && !parent) return doc;
+  const view = source.view === "board" || source.view === "calendar" ? source.view : "list";
   return {
     ...doc,
     projects: [
@@ -85,17 +105,37 @@ export const addProject = (doc, name) => {
       {
         id: createId(),
         name: trimmed,
-        color: nextColor(doc.projects),
+        description: clip(source.description, 2000),
+        color: isProjectColor(source.color) ? source.color : "charcoal",
         favorite: false,
         archived: false,
-        view: "list",
+        view,
+        teamId: parent?.teamId ?? (typeof source.teamId === "string" && source.teamId ? source.teamId : null),
+        parentId: parent ? parent.id : null,
       },
     ],
   };
 };
 
+export const setProjectParent = (doc, id, parentId) => {
+  if (id === INBOX_ID) return doc;
+  const project = projectById(doc, id);
+  if (!project) return doc;
+  const nextParent = parentId || null;
+  if (nextParent === id || nextParent === INBOX_ID) return doc;
+  if (nextParent && !projectById(doc, nextParent)) return doc;
+  if (nextParent && descendantProjectIds(doc, id).has(nextParent)) return doc;
+  if ((project.parentId ?? null) === nextParent) return doc;
+  return {
+    ...doc,
+    projects: doc.projects.map((item) =>
+      item.id === id ? { ...item, parentId: nextParent } : item,
+    ),
+  };
+};
+
 export const renameProject = (doc, id, name) => {
-  const trimmed = clip(name, 80);
+  const trimmed = clip(name, 120);
   const current = projectById(doc, id);
   if (!trimmed || !current || current.name === trimmed) return doc;
   return {
@@ -107,7 +147,7 @@ export const renameProject = (doc, id, name) => {
 };
 
 export const setProjectColor = (doc, id, color) => {
-  if (!COLORS.includes(color)) return doc;
+  if (!isProjectColor(color)) return doc;
   return {
     ...doc,
     projects: doc.projects.map((project) =>
@@ -119,7 +159,7 @@ export const setProjectColor = (doc, id, color) => {
 export const setProjectView = (doc, id, view) => ({
   ...doc,
   projects: doc.projects.map((project) =>
-    project.id === id ? { ...project, view: view === "board" ? "board" : "list" } : project,
+    project.id === id ? { ...project, view: view === "board" || view === "calendar" ? view : "list" } : project,
   ),
 });
 
@@ -137,9 +177,15 @@ export const setProjectArchived = (doc, id, archived) => {
 
 export const deleteProject = (doc, id) => {
   if (id === INBOX_ID) return doc;
+  const current = projectById(doc, id);
+  const fallbackParent = current?.parentId ?? null;
   return {
     ...doc,
-    projects: doc.projects.filter((project) => project.id !== id),
+    projects: doc.projects
+      .filter((project) => project.id !== id)
+      .map((project) =>
+        project.parentId === id ? { ...project, parentId: fallbackParent } : project,
+      ),
     sections: doc.sections.filter((section) => section.projectId !== id),
     tasks: doc.tasks.map((task) =>
       task.projectId === id ? { ...task, projectId: INBOX_ID, sectionId: null } : task,
@@ -299,6 +345,7 @@ const applyPatch = (doc, task, patch) => {
         : Date.now()
       : null;
   }
+  if ("location" in patch) next.location = clip(patch.location, 200);
   if ("labelIds" in patch) next.labelIds = knownLabelIds(doc, patch.labelIds);
   if ("order" in patch && Number.isFinite(patch.order)) next.order = patch.order;
   if (
@@ -383,6 +430,7 @@ export const addTask = (doc, input) => {
     remindedAt: null,
     completed: false,
     completedAt: null,
+    location: clip(input.location, 200),
     labelIds: knownLabelIds(doc, input.labelIds),
     order,
     createdAt: Date.now(),
@@ -401,11 +449,18 @@ export const addTaskFromResolved = (doc, resolved) => {
   return addTask(next, { ...resolved, labelIds });
 };
 
-export const toggleTask = (doc, id) => {
+export const toggleTask = (doc, id, options = {}) => {
   const task = taskById(doc, id);
   if (!task) return doc;
   if (!task.completed && task.recurrence && task.due) {
-    return updateTask(doc, id, { due: nextOccurrence(task.due, task.recurrence) });
+    let next = updateTask(doc, id, { due: nextOccurrence(task.due, task.recurrence) });
+    if (options.resetSubtasks !== false) {
+      for (const descId of descendantIds(next, id)) {
+        if (descId === id) continue;
+        if (taskById(next, descId)?.completed) next = updateTask(next, descId, { completed: false });
+      }
+    }
+    return next;
   }
   const completed = !task.completed;
   let next = updateTask(doc, id, { completed });

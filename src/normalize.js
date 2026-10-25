@@ -1,10 +1,31 @@
-import { COLORS, INBOX_ID, normalizePriority } from "./constants.js";
+import { COLORS, INBOX_ID, isProjectColor, normalizePriority } from "./constants.js";
 import { normalizeDate, normalizeRecurrence, normalizeTime } from "./dates.js";
 
 const text = (value, max) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
 
 const colorOf = (value, fallback) => (COLORS.includes(value) ? value : fallback);
+
+const breakProjectCycles = (projects) => {
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  for (const project of projects) {
+    if (project.id === INBOX_ID) {
+      project.parentId = null;
+      continue;
+    }
+    const seen = new Set([project.id]);
+    let parentId = project.parentId;
+    while (parentId) {
+      const parent = byId.get(parentId);
+      if (parentId === INBOX_ID || seen.has(parentId) || !parent) {
+        project.parentId = null;
+        break;
+      }
+      seen.add(parentId);
+      parentId = parent.parentId;
+    }
+  }
+};
 
 const breakParentCycles = (tasks) => {
   const byId = new Map(tasks.map((task) => [task.id, task]));
@@ -27,10 +48,13 @@ export const emptyDocument = () => ({
     {
       id: INBOX_ID,
       name: "Inbox",
-      color: "stone",
+      description: "",
+      color: "charcoal",
       favorite: false,
       archived: false,
       view: "list",
+      teamId: null,
+      parentId: null,
     },
   ],
   sections: [],
@@ -49,16 +73,21 @@ export const normalizeDocument = (input) => {
     if (!project || typeof project.id !== "string" || projectIds.has(project.id)) {
       continue;
     }
-    const name = text(project.name, 80);
+    const name = text(project.name, 120);
     if (!name) continue;
     const archived = project.id === INBOX_ID ? false : project.archived === true;
+    const view = project.view === "board" || project.view === "calendar" ? project.view : "list";
     projects.push({
       id: project.id,
       name,
-      color: colorOf(project.color, project.id === INBOX_ID ? "stone" : "indigo"),
+      description: text(project.description, 2000),
+      color: isProjectColor(project.color) ? project.color : "charcoal",
       favorite: archived ? false : project.favorite === true,
       archived,
-      view: project.view === "board" ? "board" : "list",
+      view,
+      teamId: project.id === INBOX_ID || typeof project.teamId !== "string" || !project.teamId ? null : project.teamId,
+      parentId:
+        project.id === INBOX_ID || typeof project.parentId !== "string" ? null : project.parentId,
     });
     projectIds.add(project.id);
   }
@@ -66,13 +95,17 @@ export const normalizeDocument = (input) => {
     projects.unshift({
       id: INBOX_ID,
       name: "Inbox",
-      color: "stone",
+      description: "",
+      color: "charcoal",
       favorite: false,
       archived: false,
       view: "list",
+      teamId: null,
+      parentId: null,
     });
     projectIds.add(INBOX_ID);
   }
+  breakProjectCycles(projects);
 
   const sections = [];
   const sectionIds = new Set();
@@ -157,6 +190,7 @@ export const normalizeDocument = (input) => {
       remindedAt: text(task.remindedAt, 40) || null,
       completed: task.completed === true,
       completedAt: Number.isFinite(task.completedAt) ? task.completedAt : null,
+      location: text(task.location, 200),
       labelIds: Array.isArray(task.labelIds)
         ? [...new Set(task.labelIds.filter((id) => labelIds.has(id)))]
         : [],

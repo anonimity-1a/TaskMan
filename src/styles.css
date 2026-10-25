@@ -6,11 +6,91 @@ body,
   height: 100%;
 }
 
+:root {
+  --accent: #de4c4a;
+  --accent-hover: #c94341;
+  --selected: #3c2224;
+  --canvas: #1e1e1e;
+  --sidebar: #1a1a1a;
+  --panel: #1f1f1f;
+  --panel-2: #262626;
+  --chip: #242424;
+  --field: #2c2c2c;
+  --menu: #2a2a2a;
+  color-scheme: dark;
+}
+
+html[data-palette="moonstone"] {
+  --accent: #4c8adf;
+  --accent-hover: #3b74c4;
+  --selected: #1c2c44;
+}
+
+html[data-palette="tangerine"] {
+  --accent: #eb8909;
+  --accent-hover: #c97408;
+  --selected: #3a2a12;
+}
+
+html[data-appearance="light"] {
+  --canvas: #ffffff;
+  --sidebar: #f7f7f7;
+  --panel: #ffffff;
+  --panel-2: #f3f3f3;
+  --chip: #f2f2f2;
+  --field: #ffffff;
+  --menu: #ffffff;
+  --selected: color-mix(in srgb, var(--accent) 16%, white);
+  --color-neutral-100: #1f1f1f;
+  --color-neutral-200: #262626;
+  --color-neutral-300: #404040;
+  --color-neutral-400: #525252;
+  --color-neutral-500: #737373;
+  color-scheme: light;
+}
+
+html[data-appearance="light"][data-palette="moonstone"] {
+  --selected: color-mix(in srgb, var(--accent) 16%, white);
+}
+
+html[data-appearance="light"][data-palette="tangerine"] {
+  --selected: color-mix(in srgb, var(--accent) 18%, white);
+}
+
 body {
   margin: 0;
   font-family: "Segoe UI", sans-serif;
-  background: #fafaf9;
-  color: #1c1917;
+  background: var(--canvas);
+  color: #ececec;
+}
+
+html[data-appearance="light"] body {
+  color: #202020;
+}
+
+html[data-appearance="light"] .text-white {
+  color: #1f1f1f;
+}
+
+html[data-appearance="light"] .bg-\[var\(--accent\)\],
+html[data-appearance="light"] .bg-\[var\(--accent\)\] .text-white {
+  color: #fff;
+}
+
+html[data-appearance="light"] .border-white\/5,
+html[data-appearance="light"] .border-white\/10,
+html[data-appearance="light"] .border-white\/20 {
+  border-color: rgb(0 0 0 / 0.08);
+}
+
+html[data-appearance="light"] .bg-white\/5,
+html[data-appearance="light"] .hover\:bg-white\/5:hover {
+  background-color: rgb(0 0 0 / 0.04);
+}
+
+html[data-appearance="light"] .bg-white\/10,
+html[data-appearance="light"] .hover\:bg-white\/10:hover {
+  background-color: rgb(0 0 0 / 0.06);
 }
 
 button,

@@ -2,8 +2,10 @@ import {
   WEEKDAY_NAMES,
   addDays,
   addMonths,
+  getDatePrefs,
   nextWeekdayOnOrAfter,
   normalizeTime,
+  upcomingWeekday,
   weekdayIndex,
 } from "./dates.js";
 
@@ -139,7 +141,8 @@ const consumeTime = (input) => {
 };
 
 const DATE_RULES = [
-  { re: /\bnext week\b/i, apply: (today) => addDays(today, 7) },
+  { re: /\bnext week\b/i, apply: (today) => upcomingWeekday(today, getDatePrefs().nextWeek, false) },
+  { re: /\bweekend\b/i, apply: (today) => upcomingWeekday(today, getDatePrefs().weekend ?? 6, true) },
   { re: /\bnext month\b/i, apply: (today) => addMonths(today, 1) },
   { re: /\bnext year\b/i, apply: (today) => addMonths(today, 12) },
   { re: /\btomorrow\b/i, apply: (today) => addDays(today, 1) },
@@ -181,26 +184,35 @@ const consumeDate = (input, today) => {
 
 const consumePriority = (input) => {
   let priority = null;
-  const rest = input.replace(/\bp([1-4])\b/gi, (full, level) => {
-    if (priority === null) priority = Number(level);
-    return " ";
-  });
+  const rest = input.replace(
+    /(^|\s)(?:p([1-4])\b|!!([1-4])(?!\d))/gi,
+    (full, lead, wordLevel, bangLevel) => {
+      priority = Number(wordLevel || bangLevel);
+      return lead ? " " : "";
+    },
+  );
   return { rest, priority };
 };
 
-export const parseQuickAdd = (text, doc, today) => {
+export const applyPriorityShorthand = (text) => {
+  const { rest, priority } = consumePriority(String(text ?? ""));
+  return { title: collapse(rest).slice(0, 500), priority };
+};
+
+export const parseQuickAdd = (text, doc, today, options = {}) => {
   const projects = doc?.projects ?? [];
   const labels = doc?.labels ?? [];
+  const smartDates = options.smartDates !== false;
   let rest = String(text ?? "");
   const project = consumeProject(rest, projects);
   rest = project.rest;
   const label = consumeLabels(rest, labels);
   rest = label.rest;
-  const recurrence = consumeRecurrence(rest, today);
+  const recurrence = smartDates ? consumeRecurrence(rest, today) : { rest, recurrence: null, due: null };
   rest = recurrence.rest;
-  const time = consumeTime(rest);
+  const time = smartDates ? consumeTime(rest) : { rest, dueTime: null };
   rest = time.rest;
-  const date = consumeDate(rest, today);
+  const date = smartDates ? consumeDate(rest, today) : { rest, due: null };
   rest = date.rest;
   const priority = consumePriority(rest);
   rest = priority.rest;
@@ -216,8 +228,8 @@ export const parseQuickAdd = (text, doc, today) => {
   };
 };
 
-export const resolveQuickAdd = (doc, form, today) => {
-  const parsed = parseQuickAdd(form.raw, doc, today);
+export const resolveQuickAdd = (doc, form, today, options = {}) => {
+  const parsed = parseQuickAdd(form.raw, doc, today, options);
   const baseLabels = form.labelIds ?? [];
   return {
     title: parsed.title,
@@ -240,8 +252,9 @@ export const resolveQuickAdd = (doc, form, today) => {
     newLabels: form.labelsTouched ? [] : parsed.newLabels,
     parentId: form.parentId ?? null,
     sectionId: form.sectionId ?? null,
-    description: "",
-    deadline: null,
-    reminder: null,
+    description: form.description ?? "",
+    deadline: form.deadline || null,
+    location: form.location ?? "",
+    reminder: form.reminderTouched ? form.reminder || null : (form.reminder ?? null),
   };
 };
