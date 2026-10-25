@@ -49,7 +49,7 @@ The browser uses `/api` on the same origin. Set `VITE_API_URL` at build time whe
 npm run build:extension
 ```
 
-In Chrome or Edge, open `chrome://extensions`, turn on Developer mode, and load `extension/dist`. The popup signs in to the local API at `http://127.0.0.1:8787/api`. Set `VITE_API_URL` to the home server, such as `http://192.168.1.9:5173/api`, before building when the API is not on this computer. The popup shows Today and quick add. Projects, the board, and the calendar stay on the website.
+In Chrome or Edge, open `chrome://extensions`, turn on Developer mode, and load `extension/dist`. The toolbar button opens the same TaskMan app as the website in the side panel. It signs in to `https://taskman.aamoghtech.org/api`. Set `VITE_API_URL` before building when the extension should use another API.
 
 ## Saved tasks on this device
 

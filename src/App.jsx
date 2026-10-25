@@ -112,7 +112,7 @@ export function App() {
   );
   const [user, setUser] = useState(undefined);
   const [legacy, setLegacy] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia("(min-width: 768px)").matches);
   const searchRef = useRef(null);
   const importRef = useRef(null);
   const priorView = useRef({ kind: "inbox" });

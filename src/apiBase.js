@@ -5,7 +5,10 @@ export const apiBase = () => {
   }
   if (typeof window !== "undefined") {
     const protocol = window.location.protocol;
-    if (protocol === "file:" || protocol === "chrome-extension:") {
+    if (protocol === "chrome-extension:") {
+      return "https://taskman.aamoghtech.org/api";
+    }
+    if (protocol === "file:") {
       return "http://127.0.0.1:8787/api";
     }
   }
